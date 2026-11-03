@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes pulseBorder {
+  0% { border-color: #000; }
+  50% { border-color: #FFC900; }
+  100% { border-color: #000; }
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom Scrollbars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom indicator pulses */
+.border-pulse {
+  animation: pulseBorder 2s infinite;
+}
+
+/* Custom layout math adjustments */
+body {
+  background-color: #F4F0EA;
+}
