@@ -1,0 +1,632 @@
+import React, { useState, useRef } from 'react';
+import { 
+  Heart, 
+  MessageSquare, 
+  Share2, 
+  Image as ImageIcon, 
+  Upload, 
+  X, 
+  Send, 
+  Plus, 
+  Filter, 
+  Check, 
+  Sparkles,
+  AlertCircle,
+  Search
+} from 'lucide-react';
+import { Post, PostCategory, Tenant, PostComment } from '../types.ts';
+import { api } from '../lib/api.ts';
+
+interface PostFeedProps {
+  posts: Post[];
+  activeTenant: Tenant | null;
+  onPostCreated: (post: Post) => void;
+  onPostLiked: (postId: string, count: number, hasLiked: boolean) => void;
+  onCommentAdded: (postId: string, comment: PostComment, count: number) => void;
+}
+
+const CATEGORIES: { id: string; label: string; key: PostCategory | 'all' }[] = [
+  { id: 'all', label: 'All Updates', key: 'all' },
+  { id: 'announcement', label: 'Announcements', key: 'announcement' },
+  { id: 'general', label: 'General', key: 'general' },
+  { id: 'spotlight', label: 'Spotlight', key: 'spotlight' },
+  { id: 'qna', label: 'Q&A', key: 'qna' },
+  { id: 'event', label: 'Events', key: 'event' },
+];
+
+export const PostFeed: React.FC<PostFeedProps> = ({
+  posts,
+  activeTenant,
+  onPostCreated,
+  onPostLiked,
+  onCommentAdded,
+}) => {
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isComposerExpanded, setIsComposerExpanded] = useState(false);
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [category, setCategory] = useState<PostCategory>('general');
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Active expanded comments accordion per post
+  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+  const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [submittingComment, setSubmittingComment] = useState<Record<string, boolean>>({});
+
+  // Lightbox preview for images
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Filter posts by category and local search query (title, content, or author)
+  const filteredPosts = posts.filter((p) => {
+    const matchesCategory =
+      selectedCategory === 'all' || p.category.toLowerCase() === selectedCategory.toLowerCase();
+    if (!matchesCategory) return false;
+
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const titleMatch = p.title?.toLowerCase().includes(q);
+    const contentMatch = p.content.toLowerCase().includes(q);
+    const authorMatch = p.authorName?.toLowerCase().includes(q);
+    return Boolean(titleMatch || contentMatch || authorMatch);
+  });
+
+  // Handle Drag & Drop / File Upload
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsUploading(true);
+    setUploadError(null);
+
+    const uploads: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file.type.startsWith('image/')) {
+        setUploadError('Only image files (PNG, JPG, WebP) are supported.');
+        continue;
+      }
+      try {
+        const result = await api.uploadMedia(file);
+        if (result?.url) {
+          uploads.push(result.url);
+        }
+      } catch (err) {
+        console.error('Upload failed:', err);
+        setUploadError('Upload failed. Try a smaller file.');
+      }
+    }
+
+    setMediaUrls((prev) => [...prev, ...uploads]);
+    setIsUploading(false);
+  };
+
+  const removeMedia = (index: number) => {
+    setMediaUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCreatePost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!content.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    const result = await api.createPost({
+      title: title.trim(),
+      content: content.trim(),
+      category,
+      mediaUrls,
+    });
+
+    if (result) {
+      onPostCreated(result);
+      setTitle('');
+      setContent('');
+      setCategory('general');
+      setMediaUrls([]);
+      setIsComposerExpanded(false);
+    }
+    setIsSubmitting(false);
+  };
+
+  const handleToggleLike = async (postId: string) => {
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+    const optimisticLikes = post.hasLiked ? post.likesCount - 1 : post.likesCount + 1;
+    onPostLiked(postId, optimisticLikes, !post.hasLiked);
+
+    const res = await api.toggleLikePost(postId);
+    if (res) {
+      onPostLiked(postId, res.likesCount, res.hasLiked);
+    }
+  };
+
+  const handleToggleComments = (postId: string) => {
+    setExpandedComments((prev) => ({
+      ...prev,
+      [postId]: !prev[postId],
+    }));
+  };
+
+  const handleAddComment = async (postId: string) => {
+    const text = commentInputs[postId]?.trim();
+    if (!text || submittingComment[postId]) return;
+
+    setSubmittingComment((prev) => ({ ...prev, [postId]: true }));
+    const comment = await api.addComment(postId, text);
+    if (comment) {
+      const post = posts.find((p) => p.id === postId);
+      const newCount = (post?.commentsCount || 0) + 1;
+      onCommentAdded(postId, comment, newCount);
+      setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
+      setExpandedComments((prev) => ({ ...prev, [postId]: true }));
+    }
+    setSubmittingComment((prev) => ({ ...prev, [postId]: false }));
+  };
+
+  const formatTimeAgo = (isoDate: string) => {
+    const diff = Date.now() - new Date(isoDate).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto py-4 sm:py-8 px-3 sm:px-6">
+      
+      {/* HEADER BANNER FOR CURRENT TENANT */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-slate-200">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-1">
+            Organization Updates
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+            {activeTenant?.name || 'Company Hub'}
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            {activeTenant?.tagline} · <span className="font-mono text-[11px] sm:text-xs text-slate-400">Tenant: {activeTenant?.id.slice(0, 8)}...</span>
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsComposerExpanded(!isComposerExpanded)}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span>New Company Update</span>
+        </button>
+      </div>
+
+      {/* COMPOSER DRAWER / CARD */}
+      {isComposerExpanded && (
+        <form onSubmit={handleCreatePost} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-8">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+            <span className="text-sm font-semibold text-slate-800">Publish Company Announcement</span>
+            <button
+              type="button"
+              onClick={() => setIsComposerExpanded(false)}
+              className="text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {/* Title & Category Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <input
+                  type="text"
+                  placeholder="Headline or Announcement Title..."
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as PostCategory)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="announcement">Announcement</option>
+                  <option value="general">General</option>
+                  <option value="spotlight">Spotlight</option>
+                  <option value="qna">Q&amp;A</option>
+                  <option value="event">Event</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Content Body */}
+            <div>
+              <textarea
+                rows={3}
+                placeholder="Share context, engineering milestones, quarterly updates, or team questions..."
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                required
+                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 resize-y"
+              />
+            </div>
+
+            {/* Drag & Drop File Zone */}
+            <div 
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                handleFiles(e.dataTransfer.files);
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/20 rounded-lg p-4 text-center cursor-pointer transition-colors"
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => handleFiles(e.target.files)}
+                multiple
+                accept="image/*"
+                className="hidden"
+              />
+              <div className="flex flex-col items-center justify-center gap-1.5">
+                <Upload className="w-5 h-5 text-slate-400" />
+                <div className="text-xs font-medium text-slate-700">
+                  Drag &amp; drop photos or <span className="text-blue-600 underline">browse</span>
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Target Supabase Storage Bucket: <code className="font-mono text-slate-500">community-media/{activeTenant?.id.slice(0, 8)}...</code>
+                </div>
+              </div>
+            </div>
+
+            {uploadError && (
+              <div className="flex items-center gap-2 text-xs text-rose-600 bg-rose-50 p-2 rounded">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{uploadError}</span>
+              </div>
+            )}
+
+            {/* Uploaded Media Previews */}
+            {mediaUrls.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                {mediaUrls.map((url, idx) => (
+                  <div key={idx} className="relative group rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100">
+                    <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeMedia(idx)}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-slate-900/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Composer Footer Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <div className="text-xs text-slate-500">
+                {isUploading ? 'Uploading media to storage...' : `${mediaUrls.length} image(s) attached`}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsComposerExpanded(false)}
+                  className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !content.trim() || isUploading}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isSubmitting ? 'Posting...' : 'Publish'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {/* SEARCH BAR & CATEGORY FILTERS */}
+      <div className="mb-6 space-y-3">
+        {/* Local Search Input */}
+        <div className="relative flex items-center">
+          <Search className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search updates by title, content, or author..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-10 py-2 text-xs sm:text-sm bg-white border border-slate-200 rounded-xl shadow-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-slate-900 placeholder-slate-400"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              title="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Search Query Kicker */}
+        {searchQuery.trim() && (
+          <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+            <span>
+              Showing <span className="font-semibold text-slate-900 font-mono tabular-nums">{filteredPosts.length}</span> of{' '}
+              <span className="font-mono tabular-nums">{posts.length}</span> updates matching &ldquo;<span className="text-blue-600 font-medium">{searchQuery}</span>&rdquo;
+            </span>
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="text-xs text-blue-600 hover:text-blue-800 underline font-medium cursor-pointer"
+            >
+              Clear Search
+            </button>
+          </div>
+        )}
+
+        {/* Category Filter Pills */}
+        <div className="flex items-center gap-1 p-1 bg-slate-100/90 rounded-xl overflow-x-auto no-scrollbar border border-slate-200/60">
+          {CATEGORIES.map((cat) => {
+            const isActive = selectedCategory === cat.key;
+            const count = cat.key === 'all'
+              ? posts.length
+              : posts.filter((p) => p.category.toLowerCase() === cat.key).length;
+
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCategory(cat.key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors ${
+                  isActive
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>{cat.label}</span>
+                <span className={`text-[11px] font-mono ${isActive ? 'text-blue-600 font-semibold' : 'text-slate-400'}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* POSTS LIST */}
+      {filteredPosts.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs">
+          <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+            {searchQuery ? <Search className="w-5 h-5 text-slate-400" /> : <Filter className="w-5 h-5 text-slate-400" />}
+          </div>
+          <h3 className="text-base font-semibold text-slate-900 mb-1">
+            {searchQuery ? `No updates matching "${searchQuery}"` : 'No updates in this category'}
+          </h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
+            {searchQuery
+              ? 'Try checking for spelling or searching with broader keywords.'
+              : `No updates have been posted for this category under ${activeTenant?.name}. Be the first to share an update.`}
+          </p>
+          {searchQuery ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedCategory('all');
+              }}
+              className="px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
+            >
+              Reset Search &amp; Filters
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsComposerExpanded(true)}
+              className="px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
+            >
+              Create First Post
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredPosts.map((post) => {
+            const isCommentsOpen = Boolean(expandedComments[post.id]);
+            return (
+              <article 
+                key={post.id} 
+                className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 hover:border-slate-300 transition-colors"
+              >
+                {/* Post Header with unboxed metadata discipline */}
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                      {post.authorInitials || 'SY'}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-900">{post.authorName}</span>
+                        <span className="text-xs text-slate-500">{post.authorRole}</span>
+                      </div>
+                      {/* Zero-Pill Unboxed Metadata with Typographic Separator */}
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
+                        <span className="font-mono">{formatTimeAgo(post.createdAt)}</span>
+                        <span>·</span>
+                        <span className="capitalize font-medium text-slate-600">{post.category}</span>
+                        <span>·</span>
+                        <span className="font-mono text-[11px] text-slate-400">
+                          tenant:{post.tenantId.slice(0, 8)}...
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Title & Body */}
+                <h2 className="text-base font-semibold text-slate-900 mb-2 leading-snug">
+                  {post.title}
+                </h2>
+                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line mb-4">
+                  {post.content}
+                </p>
+
+                {/* Media Gallery Grid */}
+                {post.mediaUrls && post.mediaUrls.length > 0 && (
+                  <div className={`mb-4 rounded-lg overflow-hidden border border-slate-200 grid gap-1.5 ${
+                    post.mediaUrls.length === 1 
+                      ? 'grid-cols-1' 
+                      : post.mediaUrls.length === 2 
+                        ? 'grid-cols-2' 
+                        : 'grid-cols-2 sm:grid-cols-3'
+                  }`}>
+                    {post.mediaUrls.map((url, idx) => (
+                      <div 
+                        key={idx} 
+                        onClick={() => setLightboxUrl(url)}
+                        className="relative cursor-pointer group aspect-video sm:aspect-auto sm:h-52 bg-slate-100 overflow-hidden"
+                      >
+                        <img 
+                          src={url} 
+                          alt="Media attachment" 
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-200" 
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Post Footer Actions */}
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs text-slate-500">
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleLike(post.id)}
+                      className={`flex items-center gap-1.5 font-medium transition-colors ${
+                        post.hasLiked ? 'text-rose-600' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Heart className={`w-4 h-4 ${post.hasLiked ? 'fill-rose-600 text-rose-600' : ''}`} />
+                      <span className="font-mono tabular-nums">{post.likesCount}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleComments(post.id)}
+                      className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 font-medium transition-colors"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span className="font-mono tabular-nums">{post.commentsCount}</span>
+                      <span>Replies</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(window.location.href);
+                    }}
+                    className="flex items-center gap-1 text-slate-500 hover:text-slate-700"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>Share</span>
+                  </button>
+                </div>
+
+                {/* Expanded Threaded Comments */}
+                {isCommentsOpen && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                    <div className="text-xs font-semibold text-slate-700">
+                      Threaded Discussion ({post.comments?.length || 0})
+                    </div>
+
+                    {post.comments && post.comments.length > 0 ? (
+                      <div className="space-y-2.5">
+                        {post.comments.map((comment) => (
+                          <div key={comment.id} className="bg-slate-50/80 rounded-lg p-3 text-xs border border-slate-100">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-900">{comment.authorName}</span>
+                                <span className="text-[11px] text-slate-400 font-mono">
+                                  {formatTimeAgo(comment.createdAt)}
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-mono text-slate-400">
+                                {comment.authorRole}
+                              </span>
+                            </div>
+                            <p className="text-slate-700 leading-normal">{comment.content}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-400 italic">
+                        No replies yet. Start the conversation.
+                      </div>
+                    )}
+
+                    {/* Add Reply Input */}
+                    <div className="flex items-center gap-2 pt-2">
+                      <input
+                        type="text"
+                        placeholder="Write a reply..."
+                        value={commentInputs[post.id] || ''}
+                        onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddComment(post.id);
+                        }}
+                        className="flex-1 px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddComment(post.id)}
+                        disabled={submittingComment[post.id] || !commentInputs[post.id]?.trim()}
+                        className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors shrink-0"
+                      >
+                        Reply
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Lightbox Modal */}
+      {lightboxUrl && (
+        <div 
+          onClick={() => setLightboxUrl(null)}
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-xl">
+            <img src={lightboxUrl} alt="Enlarged view" className="w-full h-full object-contain" />
+            <button
+              type="button"
+              onClick={() => setLightboxUrl(null)}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-900/80 text-white flex items-center justify-center hover:bg-slate-900"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};

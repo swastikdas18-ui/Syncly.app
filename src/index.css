@@ -1,27 +1,24 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
-@keyframes slideInLeft {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
-}
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
 
-@keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #F8FAFC;
+    color: #0F172A;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-@keyframes pulseBorder {
-  0% { border-color: #000; }
-  50% { border-color: #FFC900; }
-  100% { border-color: #000; }
-}
-
-.animate-slide-in-left {
-  animation: slideInLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.animate-slide-up {
-  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 /* Custom Scrollbars */
@@ -33,12 +30,17 @@
   scrollbar-width: none;
 }
 
-/* Custom indicator pulses */
-.border-pulse {
-  animation: pulseBorder 2s infinite;
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-
-/* Custom layout math adjustments */
-body {
-  background-color: #F4F0EA;
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
 }

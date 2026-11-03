@@ -1,6 +1,6 @@
 {
-  "name": "Remix Work Connect — Community Hub",
-  "description": "A vibrant mobile-first Neobrutalist community hub and feed with channels, stages, discussions, wins, and custom posts.",
+  "name": "Syncly — Multi-Tenant Corporate Communication & Chat Platform",
+  "description": "Enterprise multi-tenant corporate hub with company feeds, drag-and-drop media uploads, real-time channel chat, and verified tenant isolation.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
