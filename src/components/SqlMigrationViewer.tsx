@@ -32,7 +32,7 @@ export const SqlMigrationViewer: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-4 sm:py-8 px-3 sm:px-6">
+    <div className="w-full max-w-5xl mx-auto py-3 sm:py-8 px-2.5 sm:px-6">
       
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-slate-200 mb-6">
@@ -49,11 +49,11 @@ export const SqlMigrationViewer: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <button
             type="button"
             onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-xs transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-xs transition-colors cursor-pointer"
           >
             {copied ? (
               <>
@@ -71,7 +71,7 @@ export const SqlMigrationViewer: React.FC = () => {
           <button
             type="button"
             onClick={handleDownload}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Download .sql</span>
@@ -80,7 +80,7 @@ export const SqlMigrationViewer: React.FC = () => {
       </div>
 
       {/* SCHEMA OVERVIEW STATS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
           <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
             <Database className="w-4 h-4 text-blue-600" />

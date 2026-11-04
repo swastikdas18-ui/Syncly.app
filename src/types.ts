@@ -7,6 +7,38 @@ export interface Tenant {
   createdAt: string;
   tagline: string;
   memberCount: number;
+  logoUrl?: string;
+  allowedDomains?: string[]; // e.g. ['stripe.com', 'stripe.org']
+  isDiscoverable?: boolean;
+  requiresApproval?: boolean;
+  industry?: string;
+  ownerId?: string;
+}
+
+export type Community = Tenant;
+
+export interface Membership {
+  id: string;
+  userId: string;
+  communityId: string;
+  role: 'owner' | 'admin' | 'moderator' | 'member' | 'intern';
+  joinedAt: string;
+  community?: Tenant;
+}
+
+export interface CommunityJoinRequest {
+  id: string;
+  communityId: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  userAvatar?: string;
+  userRole?: string;
+  message?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedBy?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Profile {
@@ -14,9 +46,52 @@ export interface Profile {
   tenantId: string; // Valid UUID
   fullName: string;
   avatarUrl?: string;
-  role: 'admin' | 'manager' | 'employee';
+  role: 'owner' | 'admin' | 'manager' | 'employee' | 'intern';
   status: 'active' | 'offline';
   initials: string;
+  headline?: string;
+}
+
+export interface UserSession {
+  user: {
+    id: string;
+    email: string;
+    fullName: string;
+    headline: string;
+    role: 'owner' | 'admin' | 'manager' | 'employee' | 'intern';
+    avatarUrl?: string;
+    tenantId: string;
+    hasCompletedOnboarding: boolean;
+  };
+  token: string;
+}
+
+export interface EventItem {
+  id: string;
+  tenantId: string;
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  location: string;
+  category: 'workshop' | 'techtalk' | 'all-hands' | 'social';
+  hostName: string;
+  hostRole: string;
+  rsvpCount: number;
+  hasRsvped: boolean;
+}
+
+export interface OnboardingPayload {
+  tenantId: string;
+  fullName: string;
+  headline: string;
+  role: 'employee' | 'intern';
+  avatarUrl: string;
+  selectedChannels: string[];
+  notifications: {
+    emailDigest: boolean;
+    realtimePush: boolean;
+  };
 }
 
 export interface PresenceUser {
@@ -111,3 +186,16 @@ export interface IsolationAuditResult {
     verifiedAt: string;
   };
 }
+
+// Re-export production database schema types
+export type {
+  Database,
+  TenantRow,
+  ProfileRow,
+  ChannelRow,
+  MessageRow,
+  PostRow,
+  PostCommentRow,
+  UserViewRow,
+} from '../types/database.ts';
+

@@ -123,3 +123,23 @@ An enterprise-grade, multi-tenant workspace communication platform providing seg
 2. **Media Upload & Preview**: Upload multiple images in the composer, verify thumbnail rendering, and check persistent URL assignment.
 3. **Real-Time Delivery**: Test sending messages in channel chat with optimistic UI updates and instant live synchronization.
 4. **Build & Type Check**: Run `compile_applet` and `lint_applet` to guarantee clean TypeScript compilation.
+
+---
+
+### 5. Multi-Community Search Screen, Multi-Membership Support & Workspace Switcher (Delivered)
+
+1. **Database Migration & Schema (`supabase/migrations/010_multi_memberships.sql`)**:
+   - `public.memberships` table with composite uniqueness `UNIQUE(user_id, community_id)` and foreign keys to `public.profiles` & `public.communities`.
+   - Full-text search vector (`search_vector tsvector`) & GIN indexing on `public.communities`.
+   - 4 granular Row-Level Security (RLS) policies for viewing memberships, admin oversight, self-joining, and membership updates.
+2. **Workspace Context & Multi-Tenant State (`lib/context/WorkspaceContext.tsx`)**:
+   - Manages `joinedCommunities`, `activeCommunity`, and provides `switchCommunity(id)`, `joinCommunity(id)`, and `batchJoin(ids)`.
+   - Synchronizes `active_community_id` and `x-tenant-id` across localStorage and HTTP cookies.
+3. **Global Community Search Screen (`src/components/SearchCommunitiesView.tsx`, `/search`, `/(dashboard)/search`)**:
+   - Debounced keyword and domain search across communities.
+   - Filter chips: `All`, `My Communities`, `Suggested (Domain Match)`, `Technology`, `Consulting`, `Public`.
+   - Instant corporate domain joining, access request modal with custom justification note, and floating batch join action bar.
+4. **Header Workspace Switcher & Navigation (`components/navigation/Header.tsx` & `src/components/Navbar.tsx`)**:
+   - Dropdown showing user's joined communities with customized role badges (`Owner`, `Admin`, `Moderator`, `Member`, `Intern`) and active checkmark.
+   - Quick search button (desktop navigation + mobile header icon) and quick links to explore directory or create new workspace.
+   - Preserves 4-tab mobile bottom dock (`/feed`, `/events`, `/channels/general`, `/profile`).

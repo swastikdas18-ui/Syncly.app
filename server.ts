@@ -20,16 +20,37 @@ interface TenantRecord {
   tagline: string;
   memberCount: number;
   createdAt: string;
+  logoUrl?: string;
+  allowedDomains?: string[];
+  isDiscoverable?: boolean;
+  requiresApproval?: boolean;
+  industry?: string;
+  ownerId?: string;
 }
 
 interface ProfileRecord {
   id: string;
   tenantId: string;
   fullName: string;
-  role: 'admin' | 'manager' | 'employee';
+  role: 'owner' | 'admin' | 'manager' | 'employee' | 'intern';
   status: 'active' | 'offline';
   avatarUrl?: string;
   initials: string;
+}
+
+export interface CommunityJoinRequestRecord {
+  id: string;
+  communityId: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  userAvatar?: string;
+  userRole?: string;
+  message?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedBy?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface PostRecord {
@@ -96,6 +117,11 @@ const tenants: TenantRecord[] = [
     tagline: 'Enterprise Cloud Infrastructure & Logistics',
     memberCount: 248,
     createdAt: '2026-01-15T09:00:00Z',
+    logoUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
+    allowedDomains: ['acme.com', 'acmecorp.internal', 'acme.org'],
+    isDiscoverable: true,
+    requiresApproval: false,
+    industry: 'Cloud Infrastructure',
   },
   {
     id: SECONDARY_TENANT_ID,
@@ -104,6 +130,107 @@ const tenants: TenantRecord[] = [
     tagline: 'Next-Gen Robotics & Autonomous Systems',
     memberCount: 165,
     createdAt: '2026-02-01T10:30:00Z',
+    logoUrl: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=120&auto=format&fit=crop&q=80',
+    allowedDomains: ['globex.tech', 'globex.com'],
+    isDiscoverable: true,
+    requiresApproval: false,
+    industry: 'Robotics & AI',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000003',
+    name: 'Stripe Engineering',
+    slug: 'stripe-eng',
+    tagline: 'Financial Infrastructure & Developer Platforms',
+    memberCount: 420,
+    createdAt: '2026-02-15T14:00:00Z',
+    logoUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=120&auto=format&fit=crop&q=80',
+    allowedDomains: ['stripe.com'],
+    isDiscoverable: true,
+    requiresApproval: true,
+    industry: 'Fintech & Developer Tools',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000004',
+    name: 'Starlight Labs',
+    slug: 'starlight-labs',
+    tagline: 'Deep Tech & Computational Genomics Research',
+    memberCount: 88,
+    createdAt: '2026-03-01T11:20:00Z',
+    logoUrl: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=120&auto=format&fit=crop&q=80',
+    allowedDomains: ['starlight.ai', 'starlightlabs.co'],
+    isDiscoverable: true,
+    requiresApproval: false,
+    industry: 'Biotech & Health',
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000005',
+    name: 'Apex Strategic Advisory',
+    slug: 'apex-advisory',
+    tagline: 'Enterprise Management Consulting & Digital Transformation',
+    memberCount: 310,
+    createdAt: '2026-02-20T11:00:00Z',
+    logoUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=120&auto=format&fit=crop&q=80',
+    allowedDomains: ['apexadvisory.com', 'consulting.internal'],
+    isDiscoverable: true,
+    requiresApproval: false,
+    industry: 'Consulting',
+  },
+];
+
+export interface MembershipRecord {
+  id: string;
+  userId: string;
+  userEmail: string;
+  communityId: string;
+  role: 'owner' | 'admin' | 'moderator' | 'member' | 'intern';
+  joinedAt: string;
+}
+
+const memberships: MembershipRecord[] = [
+  {
+    id: 'mem-001',
+    userId: '00000000-0000-0000-0000-000000000010',
+    userEmail: 'sarah.chen@acmecorp.internal',
+    communityId: DEFAULT_TENANT_ID,
+    role: 'owner',
+    joinedAt: '2026-01-15T09:00:00Z',
+  },
+  {
+    id: 'mem-002',
+    userId: '00000000-0000-0000-0000-000000000010',
+    userEmail: 'sarah.chen@acmecorp.internal',
+    communityId: SECONDARY_TENANT_ID,
+    role: 'moderator',
+    joinedAt: '2026-02-01T10:30:00Z',
+  },
+];
+
+const joinRequests: CommunityJoinRequestRecord[] = [
+  {
+    id: 'req-001',
+    communityId: DEFAULT_TENANT_ID,
+    userId: '99999999-9999-9999-9999-999999999901',
+    userEmail: 'jordan.patel@externalconsultant.io',
+    userName: 'Jordan Patel',
+    userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    userRole: 'Cloud Security Auditor',
+    message: 'Contracted for Q2 SOC2 & Cloud Infrastructure compliance audit. Requesting temporary workspace access.',
+    status: 'pending',
+    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+    updatedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+  },
+  {
+    id: 'req-002',
+    communityId: DEFAULT_TENANT_ID,
+    userId: '99999999-9999-9999-9999-999999999902',
+    userEmail: 'liam.rossi@partnertech.com',
+    userName: 'Liam Rossi',
+    userAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    userRole: 'Partner Solutions Architect',
+    message: 'Collaborating on cross-tenant integration APIs with Elena and Marcus.',
+    status: 'pending',
+    createdAt: new Date(Date.now() - 3600000 * 18).toISOString(),
+    updatedAt: new Date(Date.now() - 3600000 * 18).toISOString(),
   },
 ];
 
@@ -533,6 +660,433 @@ async function startServer() {
     });
   });
 
+  // 1.0 User Memberships Endpoint
+  app.get('/api/memberships', (req: Request, res: Response) => {
+    const callerEmail = (req.headers['x-user-email'] as string || 'sarah.chen@acmecorp.internal').toLowerCase().trim();
+    
+    // Ensure default membership exists for Acme Corp if empty
+    if (!memberships.some((m) => m.userEmail.toLowerCase() === callerEmail && m.communityId === DEFAULT_TENANT_ID)) {
+      memberships.unshift({
+        id: 'mem-acme',
+        userId: '00000000-0000-0000-0000-000000000010',
+        userEmail: callerEmail,
+        communityId: DEFAULT_TENANT_ID,
+        role: 'owner',
+        joinedAt: '2026-01-15T09:00:00Z',
+      });
+    }
+
+    const userMemberships = memberships
+      .filter((m) => m.userEmail.toLowerCase() === callerEmail)
+      .map((m) => {
+        const community = tenants.find((t) => t.id === m.communityId);
+        return {
+          ...m,
+          community,
+        };
+      });
+
+    res.json({
+      success: true,
+      count: userMemberships.length,
+      data: userMemberships,
+    });
+  });
+
+  // 1.0b Batch Join Communities
+  app.post('/api/memberships/batch-join', (req: Request, res: Response) => {
+    const { communityIds, userEmail, userName } = req.body;
+    const email = (userEmail || (req.headers['x-user-email'] as string) || 'sarah.chen@acmecorp.internal').toLowerCase().trim();
+    const domain = email.includes('@') ? email.split('@')[1] : '';
+
+    if (!Array.isArray(communityIds) || communityIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'communityIds array required' });
+    }
+
+    const joined: TenantRecord[] = [];
+    communityIds.forEach((cId: string) => {
+      const comm = tenants.find((t) => t.id === cId);
+      if (!comm) return;
+      const allowed = (comm.allowedDomains || []).map((d) => d.toLowerCase());
+      const domainMatches = allowed.includes(domain) || allowed.includes(email);
+
+      if (domainMatches || !comm.requiresApproval) {
+        if (!memberships.some((m) => m.communityId === cId && m.userEmail.toLowerCase() === email)) {
+          memberships.push({
+            id: crypto.randomUUID(),
+            userId: crypto.randomUUID(),
+            userEmail: email,
+            communityId: cId,
+            role: 'member',
+            joinedAt: new Date().toISOString(),
+          });
+          comm.memberCount = (comm.memberCount || 1) + 1;
+          joined.push(comm);
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      joinedCount: joined.length,
+      joinedCommunities: joined,
+      message: `Successfully joined ${joined.length} workspace${joined.length === 1 ? '' : 's'}.`,
+    });
+  });
+
+  // 1.1 Communities Discovery & Full-Text Search Hub
+  const handleCommunitySearch = (req: Request, res: Response) => {
+    const q = (req.query.q as string || '').toLowerCase().trim();
+    const filter = (req.query.filter as string || 'all').toLowerCase().trim();
+    const callerEmail = (req.headers['x-user-email'] as string || 'sarah.chen@acmecorp.internal').toLowerCase().trim();
+    const callerDomain = callerEmail.includes('@') ? callerEmail.split('@')[1] : 'acmecorp.internal';
+
+    let matching = tenants.filter((t) => {
+      // Non-discoverable check: only visible to active members
+      const isUserMember = memberships.some((m) => m.communityId === t.id && m.userEmail.toLowerCase() === callerEmail);
+      if (t.isDiscoverable === false && !isUserMember) {
+        return false;
+      }
+
+      if (!q) return true;
+      return (
+        t.name.toLowerCase().includes(q) ||
+        t.slug.toLowerCase().includes(q) ||
+        (t.tagline && t.tagline.toLowerCase().includes(q)) ||
+        (t.industry && t.industry.toLowerCase().includes(q)) ||
+        (t.allowedDomains && t.allowedDomains.some((d) => d.toLowerCase().includes(q)))
+      );
+    });
+
+    const enriched = matching.map((t) => {
+      const allowed = (t.allowedDomains || []).map((d) => d.toLowerCase());
+      const matchesUserDomain = allowed.includes(callerDomain) || allowed.includes(callerEmail);
+      const isCurrentWorkspace = t.id === req.tenantId;
+      const userMembership = memberships.find((m) => m.communityId === t.id && m.userEmail.toLowerCase() === callerEmail);
+      const isMember = !!userMembership;
+      const userRole = userMembership?.role || (t.id === DEFAULT_TENANT_ID ? 'owner' : undefined);
+
+      const userPendingRequest = joinRequests.find(
+        (r) => r.communityId === t.id && r.userEmail.toLowerCase() === callerEmail && r.status === 'pending'
+      );
+
+      return {
+        ...t,
+        matchesUserDomain,
+        isCurrentWorkspace,
+        isMember,
+        userRole,
+        hasPendingRequest: !!userPendingRequest,
+        pendingRequestId: userPendingRequest?.id,
+      };
+    });
+
+    // Apply Filter Chips: all | my | suggested | technology | consulting | public
+    let filtered = enriched;
+    if (filter === 'my') {
+      filtered = enriched.filter((c) => c.isMember);
+    } else if (filter === 'suggested') {
+      filtered = enriched.filter((c) => c.matchesUserDomain && !c.isMember);
+    } else if (filter === 'technology') {
+      filtered = enriched.filter((c) => {
+        const ind = (c.industry || '').toLowerCase();
+        return ind.includes('tech') || ind.includes('cloud') || ind.includes('software') || ind.includes('robotics') || ind.includes('biotech');
+      });
+    } else if (filter === 'consulting') {
+      filtered = enriched.filter((c) => {
+        const ind = (c.industry || '').toLowerCase();
+        return ind.includes('consult') || ind.includes('advis');
+      });
+    } else if (filter === 'public') {
+      filtered = enriched.filter((c) => c.isDiscoverable !== false && !c.requiresApproval);
+    }
+
+    res.json({
+      success: true,
+      callerEmail,
+      callerDomain,
+      count: filtered.length,
+      data: filtered,
+    });
+  };
+
+  app.get('/api/communities/explore', handleCommunitySearch);
+  app.get('/api/communities/search', handleCommunitySearch);
+
+  // 1.2 Create Community Wizard & Auto-Provisioning
+  app.post('/api/communities/create', (req: Request, res: Response) => {
+    const {
+      name,
+      slug,
+      tagline,
+      description,
+      logoUrl,
+      allowedDomains,
+      requiresApproval,
+      isDiscoverable,
+      industry,
+      creatorName,
+      creatorEmail,
+    } = req.body;
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Community name is required.' });
+    }
+
+    const cleanSlug = (slug || name)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || `workspace-${Date.now()}`;
+
+    // Check slug uniqueness
+    const slugTaken = tenants.some((t) => t.slug === cleanSlug);
+    const finalSlug = slugTaken ? `${cleanSlug}-${Math.floor(1000 + Math.random() * 9000)}` : cleanSlug;
+
+    const newCommunityId = crypto.randomUUID();
+    const parsedDomains = Array.isArray(allowedDomains)
+      ? allowedDomains.map((d: string) => d.trim().replace(/^@/, '').toLowerCase()).filter(Boolean)
+      : [];
+
+    const newCommunity: TenantRecord = {
+      id: newCommunityId,
+      name: name.trim(),
+      slug: finalSlug,
+      tagline: (tagline || description || 'Collaborative team workspace').trim(),
+      memberCount: 1,
+      createdAt: new Date().toISOString(),
+      logoUrl: logoUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(finalSlug)}`,
+      allowedDomains: parsedDomains.length > 0 ? parsedDomains : ['acme.com'],
+      isDiscoverable: isDiscoverable !== false,
+      requiresApproval: requiresApproval === true,
+      industry: industry || 'Technology',
+      ownerId: creatorEmail || 'current-user',
+    };
+
+    tenants.push(newCommunity);
+
+    // Auto-seed default channels: #general, #announcements, #dev-team, #random
+    const defaultChannelNames = [
+      { id: 'general', name: 'general', desc: 'Company-wide updates and watercooler talk' },
+      { id: 'announcements', name: 'announcements', desc: 'Official broadcasts and leadership news' },
+      { id: 'dev-team', name: 'dev-team', desc: 'Engineering, product roadmap, and technical sync' },
+      { id: 'random', name: 'random', desc: 'Casual chatter, hobbies, and coffee breaks' },
+    ];
+
+    defaultChannelNames.forEach((ch) => {
+      channels.push({
+        id: ch.id,
+        tenantId: newCommunityId,
+        name: ch.name,
+        description: ch.desc,
+        isPrivate: false,
+        createdAt: new Date().toISOString(),
+      });
+    });
+
+    // Seed welcome post
+    posts.unshift({
+      id: crypto.randomUUID(),
+      tenantId: newCommunityId,
+      authorId: crypto.randomUUID(),
+      authorName: creatorName || 'Workspace Admin',
+      authorRole: 'owner',
+      authorInitials: 'WA',
+      title: `Welcome to ${newCommunity.name}!`,
+      content: `Welcome everyone to our new workspace. Default channels #general, #announcements, #dev-team, and #random are ready.`,
+      category: 'announcement',
+      mediaUrls: [],
+      likesCount: 1,
+      commentsCount: 0,
+      createdAt: new Date().toISOString(),
+      likedBy: new Set(['current-user']),
+      comments: [],
+    });
+
+    // Add profile as 'owner'
+    const creatorUserId = crypto.randomUUID();
+    profiles.push({
+      id: creatorUserId,
+      tenantId: newCommunityId,
+      fullName: creatorName || 'Sarah Chen',
+      role: 'owner',
+      status: 'active',
+      initials: 'SC',
+    });
+
+    // Add membership record as 'owner'
+    memberships.push({
+      id: crypto.randomUUID(),
+      userId: creatorUserId,
+      userEmail: (creatorEmail || 'sarah.chen@acmecorp.internal').toLowerCase().trim(),
+      communityId: newCommunityId,
+      role: 'owner',
+      joinedAt: new Date().toISOString(),
+    });
+
+    // Broadcast new community creation to active watchers
+    broadcastToTenant(req.tenantId, 'COMMUNITY_CREATED', { community: newCommunity });
+
+    res.cookie('x-tenant-id', newCommunityId, { maxAge: 2592000000 });
+
+    res.status(201).json({
+      success: true,
+      data: newCommunity,
+      message: `Community "${newCommunity.name}" created and auto-provisioned with 4 channels.`,
+    });
+  });
+
+  // 1.3 Join Community or Submit Join Request
+  app.post('/api/communities/:id/join', (req: Request, res: Response) => {
+    const communityId = req.params.id;
+    const { message, userEmail, userName } = req.body;
+
+    const targetCommunity = tenants.find((t) => t.id === communityId);
+    if (!targetCommunity) {
+      return res.status(404).json({ success: false, error: 'Community not found.' });
+    }
+
+    const email = (userEmail || (req.headers['x-user-email'] as string) || 'sarah.chen@acmecorp.internal').toLowerCase().trim();
+    const domain = email.includes('@') ? email.split('@')[1] : '';
+    const allowed = (targetCommunity.allowedDomains || []).map((d) => d.toLowerCase());
+    const domainMatches = allowed.includes(domain) || allowed.includes(email);
+
+    // Instant Join: domain matches AND community does NOT require approval
+    if (domainMatches && !targetCommunity.requiresApproval) {
+      targetCommunity.memberCount = (targetCommunity.memberCount || 1) + 1;
+
+      // Add profile
+      const newUserId = crypto.randomUUID();
+      profiles.push({
+        id: newUserId,
+        tenantId: communityId,
+        fullName: userName || 'Team Member',
+        role: 'employee',
+        status: 'active',
+        initials: (userName || 'TM').slice(0, 2).toUpperCase(),
+      });
+
+      // Add membership
+      if (!memberships.some((m) => m.communityId === communityId && m.userEmail.toLowerCase() === email)) {
+        memberships.push({
+          id: crypto.randomUUID(),
+          userId: newUserId,
+          userEmail: email,
+          communityId,
+          role: 'member',
+          joinedAt: new Date().toISOString(),
+        });
+      }
+
+      res.cookie('x-tenant-id', communityId, { maxAge: 2592000000 });
+
+      return res.json({
+        success: true,
+        status: 'joined',
+        message: `Welcome to ${targetCommunity.name}! Verified corporate email domain (@${domain}) granted instant access.`,
+        tenant: targetCommunity,
+      });
+    }
+
+    // Requires Approval or Domain Mismatch -> Submit Pending Join Request
+    const existingPending = joinRequests.find(
+      (r) => r.communityId === communityId && r.userEmail.toLowerCase() === email && r.status === 'pending'
+    );
+
+    if (existingPending) {
+      return res.json({
+        success: true,
+        status: 'already_requested',
+        message: 'Your join request has already been submitted and is pending workspace admin review.',
+        request: existingPending,
+      });
+    }
+
+    const newRequest: CommunityJoinRequestRecord = {
+      id: `req-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      communityId,
+      userId: crypto.randomUUID(),
+      userEmail: email,
+      userName: userName || 'Employee Applicant',
+      userAvatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(email)}`,
+      userRole: domainMatches ? 'Verified Domain Member' : 'External Collaborator',
+      message: message?.trim() || (domainMatches ? 'Joining via corporate team email.' : 'Requesting cross-department collaboration access.'),
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    joinRequests.unshift(newRequest);
+
+    // Broadcast to community admins via SSE
+    broadcastToTenant(communityId, 'JOIN_REQUEST_CREATED', {
+      communityId,
+      request: newRequest,
+    });
+
+    res.status(202).json({
+      success: true,
+      status: 'pending',
+      message: 'Join request submitted. Workspace administrators have been notified for review.',
+      request: newRequest,
+    });
+  });
+
+  // 1.4 Get Join Requests for a Community (Admins/Owners)
+  app.get('/api/communities/:id/requests', (req: Request, res: Response) => {
+    const communityId = req.params.id;
+    const requests = joinRequests.filter((r) => r.communityId === communityId);
+    res.json({
+      success: true,
+      count: requests.length,
+      pendingCount: requests.filter((r) => r.status === 'pending').length,
+      data: requests,
+    });
+  });
+
+  // 1.5 Review Join Request (Approve / Reject)
+  app.post('/api/communities/:id/requests/:requestId/review', (req: Request, res: Response) => {
+    const { id: communityId, requestId } = req.params;
+    const { action } = req.body;
+
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ success: false, error: 'Invalid action. Must be approve or reject.' });
+    }
+
+    const request = joinRequests.find((r) => r.id === requestId && r.communityId === communityId);
+    if (!request) {
+      return res.status(404).json({ success: false, error: 'Join request not found.' });
+    }
+
+    request.status = action === 'approve' ? 'approved' : 'rejected';
+    request.updatedAt = new Date().toISOString();
+    request.reviewedBy = 'sarah.chen@acmecorp.internal';
+
+    if (action === 'approve') {
+      const targetCommunity = tenants.find((t) => t.id === communityId);
+      if (targetCommunity) {
+        targetCommunity.memberCount = (targetCommunity.memberCount || 1) + 1;
+      }
+      profiles.push({
+        id: request.userId,
+        tenantId: communityId,
+        fullName: request.userName,
+        avatarUrl: request.userAvatar,
+        role: 'employee',
+        status: 'active',
+        initials: request.userName.slice(0, 2).toUpperCase(),
+      });
+    }
+
+    broadcastToTenant(communityId, 'JOIN_REQUEST_UPDATED', { request });
+
+    res.json({
+      success: true,
+      message: `Request ${action === 'approve' ? 'approved' : 'rejected'} successfully.`,
+      data: request,
+    });
+  });
+
   // 1b. Supabase Presence API (Scoped to active tenant)
   app.get('/api/presence', (req: Request, res: Response) => {
     const tenantPresence = presenceList.filter((p) => p.tenantId === req.tenantId);
@@ -842,6 +1396,109 @@ async function startServer() {
       path: storagePath,
       url: cdnUrl,
       tenantId: req.tenantId,
+    });
+  });
+
+  // 5b. Tenant Onboarding Endpoint
+  app.post('/api/tenant/onboarding', (req: Request, res: Response) => {
+    const { tenantId, fullName, headline, role, avatarUrl, selectedChannels, notifications } = req.body;
+    const safeTenantId = (tenantId && isValidUUID(tenantId)) ? tenantId : DEFAULT_TENANT_ID;
+
+    if (!fullName || typeof fullName !== 'string' || !fullName.trim()) {
+      return res.status(400).json({ success: false, error: 'Full name is required.' });
+    }
+
+    const assignedRole = role === 'intern' ? 'intern' : 'employee';
+    const initials = fullName
+      .trim()
+      .split(/\s+/)
+      .map((part: string) => part[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase() || 'U';
+
+    const newProfile = {
+      id: crypto.randomUUID(),
+      tenantId: safeTenantId,
+      fullName: fullName.trim(),
+      headline: headline?.trim() || (assignedRole === 'intern' ? 'Engineering Intern' : 'Enterprise Team Member'),
+      avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(fullName.trim())}`,
+      role: assignedRole,
+      status: 'active',
+      initials,
+      selectedChannels: Array.isArray(selectedChannels) && selectedChannels.length > 0 ? selectedChannels : ['general', 'announcements'],
+      notifications: notifications || { emailDigest: true, realtimePush: true },
+      hasCompletedOnboarding: true,
+      updatedAt: new Date().toISOString()
+    };
+
+    res.cookie('x-tenant-id', safeTenantId, { maxAge: 2592000000 });
+    res.cookie('syncly_onboarded', 'true', { maxAge: 2592000000 });
+
+    res.status(200).json({
+      success: true,
+      profile: newProfile,
+      has_completed_onboarding: true,
+      message: 'Onboarding completed successfully'
+    });
+  });
+
+  // 5c. Profile Details Update Endpoint
+  app.patch('/api/profile', (req: Request, res: Response) => {
+    const { id, fullName, headline, avatarUrl, role, email } = req.body;
+
+    // Find profile in active tenant
+    let profile = profiles.find((p) => p.tenantId === req.tenantId && (id ? p.id === id : true));
+    if (!profile) {
+      profile = {
+        id: id || crypto.randomUUID(),
+        tenantId: req.tenantId,
+        fullName: fullName || 'Sarah Chen',
+        role: (role as any) || 'admin',
+        status: 'active',
+        initials: (fullName || 'SC').trim().split(/\s+/).map((p: string) => p[0]).join('').substring(0, 2).toUpperCase() || 'SC',
+        avatarUrl,
+      };
+      profiles.push(profile);
+    } else {
+      if (fullName && typeof fullName === 'string' && fullName.trim()) {
+        profile.fullName = fullName.trim();
+        profile.initials = fullName.trim().split(/\s+/).map((p: string) => p[0]).join('').substring(0, 2).toUpperCase() || 'U';
+      }
+      if (avatarUrl !== undefined) profile.avatarUrl = avatarUrl;
+      if (role) profile.role = role;
+    }
+
+    // Update presence list if user is present
+    const presenceItem = presenceList.find((p) => p.tenantId === req.tenantId);
+    if (presenceItem) {
+      if (fullName) presenceItem.fullName = `${fullName.trim()} (You)`;
+      if (headline) presenceItem.role = headline;
+      if (profile.initials) presenceItem.initials = profile.initials;
+    }
+
+    // Broadcast presence & profile update
+    broadcastToTenant(req.tenantId, 'PROFILE_UPDATED', {
+      profile,
+      presence: presenceList.filter((p) => p.tenantId === req.tenantId),
+    });
+
+    if (role) {
+      res.cookie('syncly_role', role, { maxAge: 2592000000 });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: profile.id,
+        fullName: profile.fullName,
+        headline: headline || 'Enterprise Team Member',
+        avatarUrl: profile.avatarUrl,
+        role: profile.role,
+        email: email || 'sarah.chen@acmecorp.internal',
+        tenantId: req.tenantId,
+      },
+      message: 'Profile updated successfully',
     });
   });
 

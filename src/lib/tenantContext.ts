@@ -30,7 +30,12 @@ export const INITIAL_TENANTS = [
     slug: 'acme-corp',
     tagline: 'Enterprise Cloud Infrastructure & Logistics',
     createdAt: '2026-01-15T09:00:00Z',
-    memberCount: 248
+    memberCount: 248,
+    logoUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
+    allowedDomains: ['acme.com', 'acmecorp.internal', 'acme.org'],
+    isDiscoverable: true,
+    requiresApproval: false,
+    industry: 'Cloud Infrastructure'
   },
   {
     id: SECONDARY_TENANT_ID,
@@ -38,7 +43,51 @@ export const INITIAL_TENANTS = [
     slug: 'globex-tech',
     tagline: 'Next-Gen Robotics & Autonomous Systems',
     createdAt: '2026-02-01T10:30:00Z',
-    memberCount: 165
+    memberCount: 165,
+    logoUrl: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=120&auto=format&fit=crop&q=80',
+    allowedDomains: ['globex.tech', 'globex.com'],
+    isDiscoverable: true,
+    requiresApproval: false,
+    industry: 'Robotics & AI'
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000003',
+    name: 'Stripe Engineering',
+    slug: 'stripe-eng',
+    tagline: 'Financial Infrastructure & Developer Platforms',
+    createdAt: '2026-02-15T14:00:00Z',
+    memberCount: 420,
+    logoUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=120&auto=format&fit=crop&q=80',
+    allowedDomains: ['stripe.com'],
+    isDiscoverable: true,
+    requiresApproval: true,
+    industry: 'Fintech & Developer Tools'
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000004',
+    name: 'Starlight Labs',
+    slug: 'starlight-labs',
+    tagline: 'Deep Tech & Computational Genomics Research',
+    createdAt: '2026-03-01T11:20:00Z',
+    memberCount: 88,
+    logoUrl: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=120&auto=format&fit=crop&q=80',
+    allowedDomains: ['starlight.ai', 'starlightlabs.co'],
+    isDiscoverable: true,
+    requiresApproval: false,
+    industry: 'Biotech & Health'
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000005',
+    name: 'Apex Strategic Advisory',
+    slug: 'apex-advisory',
+    tagline: 'Enterprise Management Consulting & Digital Transformation',
+    createdAt: '2026-02-20T11:00:00Z',
+    memberCount: 310,
+    logoUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=120&auto=format&fit=crop&q=80',
+    allowedDomains: ['apexadvisory.com', 'consulting.internal'],
+    isDiscoverable: true,
+    requiresApproval: false,
+    industry: 'Consulting'
   }
 ];
 

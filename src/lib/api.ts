@@ -22,7 +22,7 @@ class SynclyApiClient {
     };
   }
 
-  // --- TENANTS ---
+  // --- TENANTS & COMMUNITIES ---
   public async getTenants(): Promise<Tenant[]> {
     try {
       const res = await fetch('/api/tenants', { headers: this.getHeaders() });
@@ -32,6 +32,170 @@ class SynclyApiClient {
     } catch (e) {
       console.warn('API getTenants fallback:', e);
       return [];
+    }
+  }
+
+  // --- MEMBERSHIPS ---
+  public async getMemberships(): Promise<any[]> {
+    try {
+      const res = await fetch('/api/memberships', { headers: this.getHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch memberships');
+      const json = await res.json();
+      return json.data || [];
+    } catch (e) {
+      console.warn('API getMemberships fallback:', e);
+      return [];
+    }
+  }
+
+  public async batchJoinCommunities(communityIds: string[]): Promise<{
+    success: boolean;
+    joinedCount: number;
+    joinedCommunities: any[];
+    message: string;
+  }> {
+    try {
+      const res = await fetch('/api/memberships/batch-join', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ communityIds }),
+      });
+      const json = await res.json();
+      return json;
+    } catch (e: any) {
+      console.error('API batchJoinCommunities error:', e);
+      return { success: false, joinedCount: 0, joinedCommunities: [], message: e.message || 'Batch join failed' };
+    }
+  }
+
+  public async exploreCommunities(query?: string, userEmail?: string, filter?: string): Promise<{
+    data: (Tenant & { matchesUserDomain: boolean; isCurrentWorkspace: boolean; isMember?: boolean; userRole?: string; hasPendingRequest: boolean; pendingRequestId?: string })[];
+    callerDomain: string;
+  }> {
+    return this.searchCommunities(query, filter, userEmail);
+  }
+
+  public async searchCommunities(query?: string, filter?: string, userEmail?: string): Promise<{
+    data: (Tenant & { matchesUserDomain: boolean; isCurrentWorkspace: boolean; isMember?: boolean; userRole?: string; hasPendingRequest: boolean; pendingRequestId?: string })[];
+    callerDomain: string;
+  }> {
+    try {
+      const url = new URL('/api/communities/search', window.location.origin);
+      if (query) url.searchParams.set('q', query);
+      if (filter && filter !== 'all') url.searchParams.set('filter', filter);
+      const headers = {
+        ...this.getHeaders(),
+        ...(userEmail ? { 'x-user-email': userEmail } : {}),
+      };
+      const res = await fetch(url.toString(), { headers });
+      if (!res.ok) throw new Error('Failed to search communities');
+      const json = await res.json();
+      return { data: json.data || [], callerDomain: json.callerDomain || '' };
+    } catch (e) {
+      console.warn('API searchCommunities error:', e);
+      return { data: [], callerDomain: '' };
+    }
+  }
+
+  public async createCommunity(payload: {
+    name: string;
+    slug?: string;
+    tagline?: string;
+    description?: string;
+    logoUrl?: string;
+    allowedDomains: string[];
+    requiresApproval: boolean;
+    isDiscoverable: boolean;
+    industry?: string;
+    creatorName?: string;
+    creatorEmail?: string;
+  }): Promise<{ success: boolean; data?: Tenant; error?: string }> {
+    try {
+      const res = await fetch('/api/communities/create', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        return { success: false, error: json.error || 'Failed to create community' };
+      }
+      return { success: true, data: json.data };
+    } catch (e: any) {
+      console.error('API createCommunity error:', e);
+      return { success: false, error: e.message || 'Network error' };
+    }
+  }
+
+  public async joinCommunity(
+    communityId: string,
+    options: { message?: string; userEmail?: string; userName?: string }
+  ): Promise<{ success: boolean; status: 'joined' | 'pending' | 'already_requested'; message: string; tenant?: Tenant }> {
+    try {
+      const res = await fetch(`/api/communities/${communityId}/join`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(options),
+      });
+      const json = await res.json();
+      return json;
+    } catch (e: any) {
+      console.error('API joinCommunity error:', e);
+      return { success: false, status: 'pending', message: e.message || 'Error joining community' };
+    }
+  }
+
+  public async getCommunityRequests(communityId: string): Promise<{ count: number; pendingCount: number; data: any[] }> {
+    try {
+      const res = await fetch(`/api/communities/${communityId}/requests`, { headers: this.getHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch requests');
+      const json = await res.json();
+      return { count: json.count || 0, pendingCount: json.pendingCount || 0, data: json.data || [] };
+    } catch (e) {
+      console.warn('API getCommunityRequests error:', e);
+      return { count: 0, pendingCount: 0, data: [] };
+    }
+  }
+
+  public async reviewCommunityRequest(
+    communityId: string,
+    requestId: string,
+    action: 'approve' | 'reject'
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await fetch(`/api/communities/${communityId}/requests/${requestId}/review`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ action }),
+      });
+      const json = await res.json();
+      return json;
+    } catch (e: any) {
+      console.error('API reviewCommunityRequest error:', e);
+      return { success: false, message: e.message || 'Review failed' };
+    }
+  }
+
+  // --- USER PROFILE ---
+  public async updateProfile(payload: {
+    id?: string;
+    fullName?: string;
+    headline?: string;
+    avatarUrl?: string;
+    role?: 'owner' | 'admin' | 'manager' | 'employee' | 'intern';
+    email?: string;
+  }): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      return json;
+    } catch (e: any) {
+      console.error('API updateProfile error:', e);
+      return { success: false, message: e.message || 'Failed to update profile' };
     }
   }
 

@@ -45,7 +45,7 @@ export const IsolationInspector: React.FC<IsolationInspectorProps> = ({ activeTe
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-4 sm:py-8 px-3 sm:px-6">
+    <div className="w-full max-w-5xl mx-auto py-3 sm:py-8 px-2.5 sm:px-6">
       
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-slate-200 mb-6">
@@ -118,7 +118,7 @@ export const IsolationInspector: React.FC<IsolationInspectorProps> = ({ activeTe
             UUID: 00000000-0000-0000-0000-000000000001
           </div>
 
-          <div className="grid grid-cols-4 gap-2 text-center pt-2 border-t border-slate-100">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-2 border-t border-slate-100">
             <div className="bg-slate-50 p-2 rounded-lg">
               <div className="text-[11px] text-slate-400">Posts</div>
               <div className="text-base font-bold font-mono text-slate-900 tabular-nums">
@@ -165,7 +165,7 @@ export const IsolationInspector: React.FC<IsolationInspectorProps> = ({ activeTe
             UUID: 00000000-0000-0000-0000-000000000002
           </div>
 
-          <div className="grid grid-cols-4 gap-2 text-center pt-2 border-t border-slate-100">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-2 border-t border-slate-100">
             <div className="bg-slate-50 p-2 rounded-lg">
               <div className="text-[11px] text-slate-400">Posts</div>
               <div className="text-base font-bold font-mono text-slate-900 tabular-nums">
