@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import React from 'react';
 import '@/src/index.css';
+import { AuthProvider } from '@/lib/context/AuthContext';
 
 export const metadata: Metadata = {
   title: 'Syncly — Multi-Tenant Corporate Communication & Chat Platform',
@@ -28,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen bg-slate-950 text-slate-100 antialiased font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );
