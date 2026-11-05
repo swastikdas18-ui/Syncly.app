@@ -6,22 +6,27 @@ import { ChatWindow } from '@/components/community/ChatWindow.tsx';
 import { useTenant } from '@/lib/context/AuthContext.tsx';
 import { Channel } from '@/src/types.ts';
 import { api } from '@/src/lib/api.ts';
+import { DEFAULT_PUBLIC_CHANNELS } from '@/lib/api/channels.ts';
 
 export default function ChannelDashboardPage() {
   const params = useParams();
   const channelId = (params?.channelId as string) || 'general';
   const { activeTenant } = useTenant();
 
-  const [channels, setChannels] = useState<Channel[]>([]);
+  const [channels, setChannels] = useState<Channel[]>(DEFAULT_PUBLIC_CHANNELS);
   const [activeChannel, setActiveChannel] = useState<string>(channelId);
 
   useEffect(() => {
     async function loadChannels() {
       try {
         const data = await api.getChannels();
-        setChannels(data || []);
+        if (data && data.length > 0) {
+          setChannels(data);
+        } else {
+          setChannels(DEFAULT_PUBLIC_CHANNELS);
+        }
       } catch {
-        setChannels([]);
+        setChannels(DEFAULT_PUBLIC_CHANNELS);
       }
     }
     loadChannels();
@@ -41,14 +46,14 @@ export default function ChannelDashboardPage() {
     );
   }
 
-  const tenantModel: any = activeTenant ? {
+  const tenantModel: any = {
     id: activeTenant.id,
     name: activeTenant.name,
     slug: activeTenant.slug,
     createdAt: activeTenant.created_at,
     tagline: 'Enterprise Workspace',
     memberCount: 1,
-  } : null;
+  };
 
   return (
     <div className="w-full h-[calc(100vh-8rem)]">

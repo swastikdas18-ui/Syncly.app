@@ -19,16 +19,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<UserSession | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('syncly_session');
-        if (stored) return JSON.parse(stored);
-      } catch {}
-    }
-    return null;
-  });
-
+  // Deterministic initial state for SSR / CSR first frame
+  const [session, setSession] = useState<UserSession | null>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [activeTenant, setActiveTenantState] = useState<TenantRow | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -69,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data } = await supabase.auth.getSession();
       if (data?.session?.user) {
         const user = data.session.user;
-        const tenantId = user.user_metadata?.tenant_id || document.cookie.match(/x-tenant-id=([^;]+)/)?.[1];
+        const tenantId = user.user_metadata?.tenant_id || (typeof document !== 'undefined' ? document.cookie.match(/x-tenant-id=([^;]+)/)?.[1] : undefined);
 
         if (tenantId) {
           await fetchProfileAndTenant(user.id, tenantId);
@@ -94,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('syncly_session', JSON.stringify(restoredSession));
         } catch {}
       } else {
-        // Fallback to local session if valid
+        // Fallback to local session if valid in client context
         const stored = typeof window !== 'undefined' ? localStorage.getItem('syncly_session') : null;
         if (stored) {
           const parsed = JSON.parse(stored);
@@ -160,9 +152,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('syncly_session');
       localStorage.removeItem('active_community_id');
       localStorage.removeItem('x-tenant-id');
-      document.cookie = 'x-tenant-id=; path=/; max-age=0';
-      document.cookie = 'syncly_session=; path=/; max-age=0';
-      document.cookie = 'syncly_role=; path=/; max-age=0';
+      if (typeof document !== 'undefined') {
+        document.cookie = 'x-tenant-id=; path=/; max-age=0';
+        document.cookie = 'syncly_session=; path=/; max-age=0';
+        document.cookie = 'syncly_role=; path=/; max-age=0';
+      }
     } catch {}
   };
 
@@ -177,7 +171,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         localStorage.setItem('syncly_session', JSON.stringify(updated));
         localStorage.setItem('x-tenant-id', tenant.id);
-        document.cookie = `x-tenant-id=${tenant.id}; path=/; max-age=2592000`;
+        if (typeof document !== 'undefined') {
+          document.cookie = `x-tenant-id=${tenant.id}; path=/; max-age=2592000`;
+        }
       } catch {}
     }
   };

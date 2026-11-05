@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   ChevronDown, 
@@ -33,9 +33,14 @@ export function Header({
   onOpenJoinRequests,
   pendingRequestsCount = 0,
 }: HeaderProps) {
+  const [isMounted, setIsMounted] = useState<boolean>(false);
   const { joinedCommunities, activeCommunity, switchCommunity } = useWorkspace();
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [copiedTenantId, setCopiedTenantId] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
+  const [copiedTenantId, setCopiedTenantId] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const copyTenantId = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -60,6 +65,41 @@ export function Header({
         return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
+
+  // SSR skeleton matching client initial layout
+  if (!isMounted) {
+    return (
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 transition-colors">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 gap-3">
+            <div className="flex items-center gap-3 sm:gap-5 min-w-0">
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-xs">
+                  S
+                </div>
+                <span className="font-bold text-slate-900 tracking-tight text-base sm:text-lg hidden xs:inline">
+                  Syncly
+                </span>
+              </div>
+              <div className="h-5 w-px bg-slate-200 hidden sm:block shrink-0" />
+              <div className="flex items-center gap-2 px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-800 bg-slate-50 rounded-lg border border-slate-200/90 shadow-2xs">
+                <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                <span className="font-semibold text-slate-900 truncate max-w-[120px] sm:max-w-[180px]">
+                  {activeCommunity?.name || 'Workspace'}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg border border-slate-200/60">
+                <Search className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">Search Workspaces</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 transition-colors">
@@ -257,17 +297,23 @@ export function Header({
             </div>
 
             {/* Profile Avatar */}
-            {currentSession && (
+            {currentSession?.user && (
               <div 
                 onClick={() => onNavigate?.('profile')}
                 className="flex items-center gap-2 pl-1 cursor-pointer group"
                 title={`Signed in as ${currentSession.user.fullName}`}
               >
-                <img
-                  src={currentSession.user.avatarUrl}
-                  alt={currentSession.user.fullName}
-                  className="w-8 h-8 rounded-full border border-slate-200 object-cover group-hover:ring-2 group-hover:ring-blue-500/30 transition-all"
-                />
+                {currentSession.user.avatarUrl ? (
+                  <img
+                    src={currentSession.user.avatarUrl}
+                    alt={currentSession.user.fullName}
+                    className="w-8 h-8 rounded-full border border-slate-200 object-cover group-hover:ring-2 group-hover:ring-blue-500/30 transition-all"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-600 text-xs font-bold">
+                    {currentSession.user.fullName.charAt(0)}
+                  </div>
+                )}
               </div>
             )}
           </div>

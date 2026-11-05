@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Newspaper, Calendar, MessageSquare, User } from 'lucide-react';
 
 export type BottomNavTab = 'feed' | 'events' | 'chat' | 'profile';
@@ -12,6 +12,12 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ currentTab, onTabChange, unreadChatCount = 0 }: BottomNavProps) {
+  const [isMounted, setIsMounted] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const tabs = [
     {
       id: 'feed' as BottomNavTab,
@@ -44,11 +50,12 @@ export function BottomNav({ currentTab, onTabChange, unreadChatCount = 0 }: Bott
     <nav
       aria-label="Mobile Bottom Navigation"
       className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-800/80 pb-[env(safe-area-inset-bottom,0px)] transition-all duration-200 select-none touch-manipulation"
+      suppressHydrationWarning
     >
       <div className="grid grid-cols-4 h-16 max-w-lg mx-auto items-center px-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
-          const isActive = currentTab === tab.id;
+          const isActive = isMounted ? currentTab === tab.id : tab.id === 'feed';
 
           return (
             <button
@@ -68,7 +75,7 @@ export function BottomNav({ currentTab, onTabChange, unreadChatCount = 0 }: Bott
                     isActive ? 'scale-110 stroke-[2.25px]' : 'stroke-2 group-hover:scale-105'
                   }`}
                 />
-                {typeof tab.badge === 'number' && tab.badge > 0 && (
+                {isMounted && typeof tab.badge === 'number' && tab.badge > 0 && (
                   <span className="absolute -top-1 -right-2 bg-blue-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center border border-zinc-950 animate-pulse">
                     {tab.badge > 9 ? '9+' : tab.badge}
                   </span>
