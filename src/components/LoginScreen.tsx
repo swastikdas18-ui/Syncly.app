@@ -89,13 +89,14 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
         });
 
         if (signInError) {
-          // If project keys are unconfigured in dev or credentials don't match live Auth, return the clean error
-          throw signInError;
+          setError(signInError.message || 'Invalid email or password. You can also use a Demo Persona below.');
+          setIsLoading(false);
+          return;
         }
 
         if (data.session && data.user) {
           const user = data.user;
-          const tenantId = user.user_metadata?.tenant_id || defaultTenantId || '';
+          const tenantId = user.user_metadata?.tenant_id || defaultTenantId || '00000000-0000-0000-0000-000000000001';
           const userSession: UserSession = {
             user: {
               id: user.id,
@@ -112,6 +113,7 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
 
           saveSession(userSession);
           onLoginSuccess(userSession, userSession.user.hasCompletedOnboarding ? 'feed' : 'onboarding');
+          return;
         }
       }
     } catch (err: any) {
@@ -131,10 +133,43 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
         }
       } catch {}
 
-      setError(err?.message || 'Authentication failed. Please verify your corporate email and password.');
+      setError(err?.message || 'Unable to connect to auth service. Try a demo persona below.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDemoLogin = (personaType: 'intern' | 'mentor') => {
+    const demoSession: UserSession = personaType === 'intern'
+      ? {
+          user: {
+            id: 'demo-intern-001',
+            email: 'alex.rivera@acme.corp',
+            fullName: 'Alex Rivera',
+            headline: 'Engineering Intern',
+            role: 'intern',
+            tenantId: '00000000-0000-0000-0000-000000000001',
+            avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128&h=128&fit=crop&crop=faces',
+            hasCompletedOnboarding: true,
+          },
+          token: 'demo-intern-token-valid',
+        }
+      : {
+          user: {
+            id: 'demo-mentor-001',
+            email: 'sarah.chen@acme.corp',
+            fullName: 'Sarah Chen',
+            headline: 'Principal Systems Architect & Mentor',
+            role: 'owner',
+            tenantId: '00000000-0000-0000-0000-000000000001',
+            avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=128&h=128&fit=crop&crop=faces',
+            hasCompletedOnboarding: true,
+          },
+          token: 'demo-mentor-token-valid',
+        };
+
+    saveSession(demoSession);
+    onLoginSuccess(demoSession, 'feed');
   };
 
   const handleGoogleAuth = async () => {
@@ -357,6 +392,34 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
           </svg>
           <span>Continue with Google Workspace</span>
         </button>
+
+        {/* One-Click Demo Personas */}
+        <div className="mt-5 pt-4 border-t border-zinc-800">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+              Instant Access (Demo Personas)
+            </span>
+            <span className="text-[10px] text-blue-400 font-mono">1-Click Sign In</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('intern')}
+              className="py-2.5 px-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-700/80 hover:border-emerald-500/50 text-zinc-200 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            >
+              <User className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>Demo Intern</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('mentor')}
+              className="py-2.5 px-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-700/80 hover:border-blue-500/50 text-zinc-200 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            >
+              <Building2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span>Demo Mentor</span>
+            </button>
+          </div>
+        </div>
 
         {/* Security Notice */}
         <p className="text-[11px] text-zinc-500 text-center mt-5">

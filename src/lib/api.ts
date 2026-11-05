@@ -491,7 +491,9 @@ class SynclyApiClient {
         return;
       }
 
-      const sseUrl = `/api/events/stream?tenantId=${encodeURIComponent(this.currentTenantId)}`;
+      const rawTenantId = this.currentTenantId;
+      const cleanTenantId = (rawTenantId && rawTenantId !== 'undefined' && rawTenantId !== 'null' ? rawTenantId : '00000000-0000-0000-0000-000000000001').trim();
+      const sseUrl = `/api/events/stream?tenantId=${encodeURIComponent(cleanTenantId)}`;
       const eventSource = new EventSource(sseUrl);
       this.sseSource = eventSource;
 

@@ -10,7 +10,11 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const tenantId = searchParams.get('tenantId') || request.headers.get('x-tenant-id') || '00000000-0000-0000-0000-000000000001';
+  const rawParam = searchParams.get('tenantId');
+  const cleanTenantId = (rawParam && rawParam !== 'undefined' && rawParam !== 'null' ? rawParam : null) 
+    || request.headers.get('x-tenant-id') 
+    || '00000000-0000-0000-0000-000000000001';
+  const tenantId = cleanTenantId.trim();
 
   const encoder = new TextEncoder();
   let keepAliveTimer: any = null;

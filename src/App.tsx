@@ -19,45 +19,39 @@ import { api } from './lib/api.ts';
 import { DEFAULT_TENANT_ID, INITIAL_TENANTS } from './lib/tenantContext.ts';
 
 export function WorkConnectHub() {
+  const [isMounted, setIsMounted] = useState<boolean>(false);
   const [tenants, setTenants] = useState<Tenant[]>(INITIAL_TENANTS);
   const [activeTenant, setActiveTenant] = useState<Tenant>(INITIAL_TENANTS[0]);
   const [joinedCommunities, setJoinedCommunities] = useState<Array<Tenant & { userRole?: string; isMember?: boolean }>>([]);
-  const [activeView, setActiveView] = useState<MainViewType>(() => {
-    if (typeof window !== 'undefined') {
-      const path = window.location.pathname;
-      if (path.includes('search')) return 'search';
-      if (path.includes('events')) return 'events';
-      if (path.includes('chat') || path.includes('channels')) return 'chat';
-      if (path.includes('profile')) return 'profile';
-      if (path.includes('explore')) return 'search';
-    }
-    return 'feed';
-  });
-  
-  // User Session State: Starts strictly from authenticated session
-  const [session, setSession] = useState<UserSession | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('syncly_session');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed?.user?.id && parsed?.user?.email) {
-            return parsed;
-          }
-        }
-      } catch {}
-    }
-    return null;
-  });
-
-  const [isAuthMode, setIsAuthMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('syncly_session');
-      return !stored;
-    }
-    return false;
-  });
+  const [activeView, setActiveView] = useState<MainViewType>('feed');
+  const [session, setSession] = useState<UserSession | null>(null);
+  const [isAuthMode, setIsAuthMode] = useState<boolean>(false);
   const [isOnboardingMode, setIsOnboardingMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const path = window.location.pathname;
+    if (path.includes('search')) setActiveView('search');
+    else if (path.includes('events')) setActiveView('events');
+    else if (path.includes('chat') || path.includes('channels')) setActiveView('chat');
+    else if (path.includes('profile')) setActiveView('profile');
+    else if (path.includes('explore')) setActiveView('search');
+
+    try {
+      const stored = localStorage.getItem('syncly_session');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.user?.id && parsed?.user?.email) {
+          setSession(parsed);
+          setIsAuthMode(false);
+          return;
+        }
+      }
+      setIsAuthMode(true);
+    } catch {
+      setIsAuthMode(true);
+    }
+  }, []);
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -376,6 +370,17 @@ export function WorkConnectHub() {
   const handleBottomNavChange = (tab: BottomNavTab) => {
     setActiveView(tab);
   };
+
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+        <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 h-16" />
+        <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-8 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
