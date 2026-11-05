@@ -96,16 +96,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const parsed = JSON.parse(storedSession);
             if (parsed?.user?.id && parsed?.user?.email) {
               setSession(parsed);
-              if (parsed?.user?.id) {
-                setProfile({
-                  id: parsed.user.id,
-                  tenant_id: parsed.user.tenantId || activeTenantId,
-                  full_name: parsed.user.fullName || 'Demo Member',
-                  role: parsed.user.role || 'employee',
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                } as any);
-              }
+              const resolvedTenant = parsed.user.tenantId || activeTenantId;
+              setProfile({
+                id: parsed.user.id,
+                tenant_id: resolvedTenant,
+                full_name: parsed.user.fullName || 'Demo Member',
+                role: parsed.user.role || 'employee',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              } as any);
+              setActiveTenantState({
+                id: resolvedTenant,
+                name: 'Acme Corporation',
+                slug: 'acme-corp',
+                created_at: new Date().toISOString(),
+              });
             } else {
               setSession(null);
             }
@@ -116,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             const user = JSON.parse(storedUser);
             if (user?.id && user?.email) {
+              const resolvedTenant = user.tenant_id || activeTenantId;
               const demoSession: UserSession = {
                 user: {
                   id: user.id,
@@ -123,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   fullName: user.full_name || 'Demo Member',
                   headline: 'Corporate Team Member',
                   role: user.role || 'employee',
-                  tenantId: user.tenant_id || activeTenantId,
+                  tenantId: resolvedTenant,
                   hasCompletedOnboarding: true,
                 },
                 token: 'demo-access-token',
@@ -131,12 +137,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setSession(demoSession);
               setProfile({
                 id: user.id,
-                tenant_id: user.tenant_id || activeTenantId,
+                tenant_id: resolvedTenant,
                 full_name: user.full_name || 'Demo Member',
                 role: user.role || 'employee',
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               } as any);
+              setActiveTenantState({
+                id: resolvedTenant,
+                name: 'Acme Corporation',
+                slug: 'acme-corp',
+                created_at: new Date().toISOString(),
+              });
             } else {
               setSession(null);
             }
@@ -153,6 +165,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }
   }, [fetchProfileAndTenant]);
+
+  // Listen to workspace-changed events
+  useEffect(() => {
+    const handleWorkspaceChanged = () => {
+      try {
+        const storedWorkspace = localStorage.getItem('syncly_workspace');
+        if (storedWorkspace) {
+          const parsed = JSON.parse(storedWorkspace);
+          if (parsed?.id) {
+            setActiveTenantState({
+              id: parsed.id,
+              name: parsed.name || 'Acme Corporation',
+              slug: parsed.slug || 'acme-corp',
+              created_at: new Date().toISOString(),
+            });
+            if (session) {
+              setSession({
+                ...session,
+                user: {
+                  ...session.user,
+                  tenantId: parsed.id,
+                  role: parsed.role || session.user.role,
+                },
+              });
+            }
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('workspace-changed', handleWorkspaceChanged);
+    return () => window.removeEventListener('workspace-changed', handleWorkspaceChanged);
+  }, [session]);
 
   useEffect(() => {
     refreshSession();

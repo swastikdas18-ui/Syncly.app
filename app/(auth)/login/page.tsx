@@ -23,6 +23,13 @@ export default function LoginPage() {
         tenant_id: '00000000-0000-0000-0000-000000000001',
       };
 
+      const defaultWorkspace = {
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'Acme Corporation',
+        slug: 'acme-corp',
+        role: role === 'intern' ? 'intern' : 'admin',
+      };
+
       const sessionPayload = JSON.stringify({
         user: {
           id: demoUser.id,
@@ -30,7 +37,7 @@ export default function LoginPage() {
           fullName: demoUser.full_name,
           headline: 'Corporate Team Member',
           role: demoUser.role,
-          tenantId: demoUser.tenant_id,
+          tenantId: defaultWorkspace.id,
           hasCompletedOnboarding: true,
         },
         token: 'demo-access-token',
@@ -39,12 +46,13 @@ export default function LoginPage() {
 
       // 1. Set cookies with root path for Edge Middleware
       document.cookie = `syncly_session=${encodeURIComponent(sessionPayload)}; path=/; max-age=86400; SameSite=Lax`;
-      document.cookie = `active_tenant_id=00000000-0000-0000-0000-000000000001; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = `active_tenant_id=${defaultWorkspace.id}; path=/; max-age=86400; SameSite=Lax`;
 
       // 2. Mirror into LocalStorage for immediate CSR hydration
       localStorage.setItem('syncly_user', JSON.stringify(demoUser));
       localStorage.setItem('syncly_session', sessionPayload);
-      localStorage.setItem('active_tenant_id', '00000000-0000-0000-0000-000000000001');
+      localStorage.setItem('active_tenant_id', defaultWorkspace.id);
+      localStorage.setItem('syncly_workspace', JSON.stringify(defaultWorkspace));
 
       // 3. Force hard navigation to trigger fresh server middleware validation
       window.location.href = '/feed';

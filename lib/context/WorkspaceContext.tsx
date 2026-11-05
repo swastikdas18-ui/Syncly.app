@@ -22,9 +22,19 @@ interface WorkspaceContextType {
   isMounted: boolean;
 }
 
+export const DEFAULT_WORKSPACE = {
+  id: '00000000-0000-0000-0000-000000000001',
+  name: 'Acme Corporation',
+  slug: 'acme-corp',
+  role: 'owner',
+};
+
 const DEFAULT_WORKSPACE_STATE: JoinedCommunity = {
   ...INITIAL_TENANTS[0],
-  userRole: 'owner',
+  id: DEFAULT_WORKSPACE.id,
+  name: DEFAULT_WORKSPACE.name,
+  slug: DEFAULT_WORKSPACE.slug,
+  userRole: DEFAULT_WORKSPACE.role,
   isMember: true,
 };
 
@@ -56,14 +66,26 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
     api.setTenantId(comm.id);
     if (typeof window !== 'undefined') {
       try {
+        localStorage.setItem('active_tenant_id', comm.id);
         localStorage.setItem('active_community_id', comm.id);
         localStorage.setItem('x-tenant-id', comm.id);
+        localStorage.setItem(
+          'syncly_workspace',
+          JSON.stringify({
+            id: comm.id,
+            name: comm.name,
+            slug: comm.slug,
+            role: comm.userRole || 'member',
+          })
+        );
       } catch {}
-      document.cookie = `active_community_id=${comm.id}; path=/; max-age=2592000`;
-      document.cookie = `x-tenant-id=${comm.id}; path=/; max-age=2592000`;
+      document.cookie = `active_tenant_id=${comm.id}; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = `active_community_id=${comm.id}; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = `x-tenant-id=${comm.id}; path=/; max-age=86400; SameSite=Lax`;
       if (comm.userRole) {
-        document.cookie = `syncly_role=${comm.userRole}; path=/; max-age=2592000`;
+        document.cookie = `syncly_role=${comm.userRole}; path=/; max-age=86400; SameSite=Lax`;
       }
+      window.dispatchEvent(new Event('workspace-changed'));
     }
   }, []);
 
@@ -102,19 +124,44 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
     }
   }, []);
 
-  // Post-mount client effect: restore active workspace from localStorage without hydration mismatch
+  // Post-mount client effect: restore active workspace from localStorage/cookies without hydration mismatch
   useEffect(() => {
     setIsMounted(true);
     try {
-      const stored = localStorage.getItem('active_community_id') || localStorage.getItem('x-tenant-id');
-      if (stored) {
-        const found = INITIAL_TENANTS.find((t) => t.id === stored);
+      const storedWorkspace = localStorage.getItem('syncly_workspace');
+      const storedTenantId = localStorage.getItem('active_tenant_id') || localStorage.getItem('active_community_id') || localStorage.getItem('x-tenant-id');
+
+      if (storedWorkspace) {
+        const parsed = JSON.parse(storedWorkspace);
+        if (parsed?.id && parsed.id !== 'default') {
+          const match = INITIAL_TENANTS.find((t) => t.id === parsed.id);
+          setActiveCommunity({
+            ...(match || DEFAULT_WORKSPACE_STATE),
+            id: parsed.id,
+            name: parsed.name || match?.name || DEFAULT_WORKSPACE.name,
+            slug: parsed.slug || match?.slug || DEFAULT_WORKSPACE.slug,
+            userRole: parsed.role || 'owner',
+            isMember: true,
+          });
+          api.setTenantId(parsed.id);
+        }
+      } else if (storedTenantId && storedTenantId !== 'default') {
+        const found = INITIAL_TENANTS.find((t) => t.id === storedTenantId);
         if (found) {
           setActiveCommunity({ ...found, userRole: 'owner', isMember: true });
           api.setTenantId(found.id);
+        } else {
+          setActiveCommunity(DEFAULT_WORKSPACE_STATE);
+          api.setTenantId(DEFAULT_WORKSPACE.id);
         }
+      } else {
+        setActiveCommunity(DEFAULT_WORKSPACE_STATE);
+        api.setTenantId(DEFAULT_WORKSPACE.id);
       }
-    } catch {}
+    } catch {
+      setActiveCommunity(DEFAULT_WORKSPACE_STATE);
+      api.setTenantId(DEFAULT_WORKSPACE.id);
+    }
     refreshMemberships();
   }, [refreshMemberships]);
 
