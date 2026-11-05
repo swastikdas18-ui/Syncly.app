@@ -49,10 +49,10 @@ export function BottomNav({ currentTab, onTabChange, unreadChatCount = 0 }: Bott
   return (
     <nav
       aria-label="Mobile Bottom Navigation"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/90 backdrop-blur-2xl border-t border-zinc-800/80 pb-[env(safe-area-inset-bottom,0px)] transition-all duration-200 select-none touch-manipulation"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 backdrop-blur-2xl border-t border-zinc-800/80 pb-[env(safe-area-inset-bottom,0px)] shadow-2xl transition-all duration-200 select-none touch-manipulation"
       suppressHydrationWarning
     >
-      <div className="flex items-center justify-around h-16 max-w-md mx-auto px-1">
+      <div className="flex items-center justify-around h-16 max-w-md mx-auto px-2">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = isMounted ? currentTab === tab.id : tab.id === 'feed';

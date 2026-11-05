@@ -38,7 +38,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex flex-col min-h-dvh bg-zinc-950 text-zinc-100 overflow-x-hidden font-sans">
+    <div className="flex flex-col min-h-dvh w-full max-w-full overflow-x-hidden bg-zinc-950 text-zinc-100 font-sans">
       <Header
         currentSession={
           profile
@@ -58,7 +58,7 @@ export default function DashboardLayout({
         }
         onNavigate={(path) => router.push(path.startsWith('/') ? path : `/${path}`)}
       />
-      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 pt-14 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:py-6 md:pb-6">
+      <main className="flex-1 w-full max-w-4xl mx-auto px-3.5 sm:px-6 pt-16 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:py-6 md:pb-6 min-w-0">
         {children}
       </main>
       <BottomNav

@@ -69,18 +69,18 @@ export function Header({
   // SSR skeleton matching client initial layout
   if (!isMounted) {
     return (
-      <header className="sticky top-0 z-40 w-full border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl pt-[env(safe-area-inset-top,0px)] px-3 sm:px-4 h-14 flex items-center justify-between transition-colors">
+      <header className="fixed top-0 left-0 right-0 z-40 h-14 bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-800/80 px-3.5 flex items-center justify-between transition-colors">
         <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="flex items-center gap-2 shrink-0">
               <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-xs">
                 S
               </div>
-              <span className="font-bold text-zinc-100 tracking-tight text-base hidden xs:inline">
+              <span className="font-bold text-zinc-100 tracking-tight text-base truncate max-w-[130px] sm:max-w-xs">
                 Syncly
               </span>
             </div>
-            <div className="flex items-center gap-2 px-2.5 py-1 text-xs font-medium text-zinc-200 bg-zinc-900 rounded-lg border border-zinc-800">
+            <div className="hidden sm:inline-flex items-center gap-2 px-2.5 py-1 text-xs font-medium text-zinc-200 bg-zinc-900 rounded-lg border border-zinc-800">
               <Building2 className="w-3.5 h-3.5 text-indigo-400" />
               <span className="font-semibold text-zinc-100 truncate max-w-[120px] sm:max-w-xs">
                 {activeCommunity?.name || 'Workspace'}
@@ -96,7 +96,7 @@ export function Header({
   }
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-xl pt-[env(safe-area-inset-top,0px)] px-3 sm:px-4 h-14 flex items-center justify-between transition-colors">
+    <header className="fixed top-0 left-0 right-0 z-40 h-14 bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-800/80 px-3.5 flex items-center justify-between transition-colors">
       <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
         
         {/* LEFT: BRAND & PERSISTENT WORKSPACE SWITCHER */}
@@ -109,7 +109,7 @@ export function Header({
             <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-xs group-hover:bg-indigo-500 transition-colors">
               S
             </div>
-            <span className="font-bold text-zinc-100 tracking-tight text-base hidden xs:inline">
+            <span className="font-bold text-zinc-100 tracking-tight text-base truncate max-w-[130px] sm:max-w-xs">
               Syncly
             </span>
           </div>
@@ -121,7 +121,7 @@ export function Header({
             <button
               type="button"
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-zinc-200 bg-zinc-900/90 hover:bg-zinc-800 rounded-lg border border-zinc-800 shadow-2xs transition-all hover:border-zinc-700 max-w-[160px] sm:max-w-xs"
+              className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-zinc-200 bg-zinc-900/90 hover:bg-zinc-800 rounded-lg border border-zinc-800 shadow-2xs transition-all hover:border-zinc-700 max-w-[140px] sm:max-w-xs"
               title="Switch active workspace"
             >
               <div className="w-5 h-5 rounded bg-indigo-950 text-indigo-400 flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden">
@@ -131,11 +131,11 @@ export function Header({
                   <Building2 className="w-3.5 h-3.5 text-indigo-400" />
                 )}
               </div>
-              <span className="font-semibold text-zinc-100 max-w-[100px] sm:max-w-xs truncate">
-                {activeCommunity?.name || 'Select Workspace'}
+              <span className="font-semibold text-zinc-100 max-w-[80px] sm:max-w-xs truncate">
+                {activeCommunity?.name || 'Workspace'}
               </span>
               {activeCommunity?.userRole && (
-                <span className={`hidden md:inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded border uppercase tracking-wider ${getRoleBadgeColor(activeCommunity.userRole)}`}>
+                <span className={`hidden sm:inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded border uppercase tracking-wider ${getRoleBadgeColor(activeCommunity.userRole)}`}>
                   {activeCommunity.userRole}
                 </span>
               )}

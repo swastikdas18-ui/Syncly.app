@@ -438,11 +438,13 @@ class SynclyApiClient {
         headers: this.getHeaders(),
         body: JSON.stringify({ status, channelId }),
       });
-      if (!res.ok) throw new Error('Failed to track presence');
-      const json = await res.json();
-      return json.data;
-    } catch (e) {
-      console.error('API trackPresence error:', e);
+      if (!res.ok) {
+        return null;
+      }
+      const json = await res.json().catch(() => null);
+      return json?.data ?? null;
+    } catch {
+      // Catch silently to prevent unhandled rejection spam in console
       return null;
     }
   }

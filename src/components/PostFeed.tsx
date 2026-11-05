@@ -291,7 +291,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
         )}
 
         {/* Category Filter Horizontal Rail */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 -mx-3 px-3 sm:mx-0 sm:px-0 scroll-smooth">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-2 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 scroll-smooth">
           {CATEGORIES.map((cat) => {
             const isActive = selectedCategory === cat.key;
             const count = cat.key === 'all'
@@ -498,26 +498,26 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             return (
               <article 
                 key={post.id} 
-                className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 hover:border-slate-300 transition-colors"
+                className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:p-5 mb-4 shadow-xs transition-colors hover:border-zinc-700/80"
               >
                 {/* Post Header with unboxed metadata discipline */}
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-200 flex items-center justify-center text-xs font-bold shrink-0">
                       {post.authorInitials || 'SY'}
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-sm font-semibold text-slate-900">{post.authorName}</span>
-                        <span className="text-xs text-slate-500">{post.authorRole}</span>
+                        <span className="text-sm font-semibold text-zinc-100">{post.authorName}</span>
+                        <span className="text-xs text-zinc-400">{post.authorRole}</span>
                       </div>
                       {/* Zero-Pill Unboxed Metadata with Typographic Separator */}
-                      <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
+                      <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-0.5">
                         <span className="font-mono">{formatTimeAgo(post.createdAt)}</span>
                         <span>·</span>
-                        <span className="capitalize font-medium text-slate-600">{post.category}</span>
+                        <span className="capitalize font-medium text-zinc-300">{post.category}</span>
                         <span>·</span>
-                        <span className="font-mono text-[11px] text-slate-400">
+                        <span className="font-mono text-[11px] text-zinc-500">
                           tenant:{post.tenantId.slice(0, 8)}...
                         </span>
                       </div>
@@ -526,16 +526,16 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                 </div>
 
                 {/* Title & Body */}
-                <h2 className="text-base font-semibold text-slate-900 mb-2 leading-snug">
+                <h2 className="text-base font-semibold text-zinc-100 mb-2 leading-snug">
                   {post.title}
                 </h2>
-                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line mb-4">
+                <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-line mb-4">
                   {post.content}
                 </p>
 
                 {/* Media Gallery Grid */}
                 {post.mediaUrls && post.mediaUrls.length > 0 && (
-                  <div className={`mb-4 rounded-lg overflow-hidden border border-slate-200 grid gap-1.5 ${
+                  <div className={`mb-4 rounded-xl overflow-hidden border border-zinc-800 grid gap-1.5 ${
                     post.mediaUrls.length === 1 
                       ? 'grid-cols-1' 
                       : post.mediaUrls.length === 2 
@@ -546,13 +546,13 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                       <div 
                         key={idx} 
                         onClick={() => setLightboxUrl(url)}
-                        className="relative cursor-pointer group aspect-video sm:aspect-[4/3] md:aspect-[16/10] bg-slate-100 overflow-hidden"
+                        className="relative cursor-pointer group aspect-video bg-zinc-900 rounded-xl overflow-hidden"
                       >
                         <img 
                           src={url} 
                           alt="Media attachment" 
                           referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-200" 
+                          className="w-full h-full object-cover rounded-xl group-hover:scale-102 transition-transform duration-200" 
                         />
                       </div>
                     ))}
