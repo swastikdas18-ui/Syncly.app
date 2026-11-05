@@ -1,24 +1,92 @@
 'use client';
 
-import React from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LoginScreen } from '@/src/components/LoginScreen';
-import { UserSession } from '@/src/types';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleLoginSuccess = (session: UserSession, redirectTo: 'onboarding' | 'feed') => {
-    if (redirectTo === 'onboarding') {
-      router.push('/onboarding');
-    } else {
-      router.push('/feed');
+  const handleDemoLogin = (role: 'intern' | 'mentor') => {
+    try {
+      setLoading(true);
+      setErrorMsg(null);
+
+      const demoUser = {
+        id: role === 'intern' 
+          ? '00000000-0000-0000-0000-000000000002' 
+          : '00000000-0000-0000-0000-000000000001',
+        email: role === 'intern' ? 'intern@syncly.internal' : 'mentor@syncly.internal',
+        full_name: role === 'intern' ? 'Demo Intern' : 'Demo Mentor',
+        role: role,
+        tenant_id: '00000000-0000-0000-0000-000000000001',
+      };
+
+      const sessionPayload = JSON.stringify({
+        user: {
+          id: demoUser.id,
+          email: demoUser.email,
+          fullName: demoUser.full_name,
+          headline: 'Corporate Team Member',
+          role: demoUser.role,
+          tenantId: demoUser.tenant_id,
+          hasCompletedOnboarding: true,
+        },
+        token: 'demo-access-token',
+        expires_at: Date.now() + 86400000,
+      });
+
+      // 1. Set cookies with root path for Edge Middleware
+      document.cookie = `syncly_session=${encodeURIComponent(sessionPayload)}; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = `active_tenant_id=00000000-0000-0000-0000-000000000001; path=/; max-age=86400; SameSite=Lax`;
+
+      // 2. Mirror into LocalStorage for immediate CSR hydration
+      localStorage.setItem('syncly_user', JSON.stringify(demoUser));
+      localStorage.setItem('syncly_session', sessionPayload);
+      localStorage.setItem('active_tenant_id', '00000000-0000-0000-0000-000000000001');
+
+      // 3. Force hard navigation to trigger fresh server middleware validation
+      window.location.href = '/feed';
+    } catch (err: any) {
+      setLoading(false);
+      setErrorMsg(err?.message || 'Failed to authenticate demo persona.');
     }
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-center items-center p-4">
-      <LoginScreen onLoginSuccess={handleLoginSuccess} />
+    <div className="min-h-dvh flex items-center justify-center bg-zinc-950 p-4 text-zinc-100">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/80 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-bold tracking-tight">Syncly Enterprise</h1>
+          <p className="text-sm text-zinc-400 mt-1">Select a demo persona to enter</p>
+        </div>
+
+        {errorMsg && (
+          <div className="mb-4 rounded-lg bg-rose-500/10 border border-rose-500/20 p-3 text-xs text-rose-400">
+            {errorMsg}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => handleDemoLogin('intern')}
+            className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-medium text-sm transition-colors flex items-center justify-center disabled:opacity-50 cursor-pointer"
+          >
+            {loading ? 'Entering...' : 'Demo Intern'}
+          </button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => handleDemoLogin('mentor')}
+            className="w-full h-11 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 font-medium text-sm transition-colors flex items-center justify-center disabled:opacity-50 cursor-pointer"
+          >
+            {loading ? 'Entering...' : 'Demo Mentor'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

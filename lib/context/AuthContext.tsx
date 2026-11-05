@@ -86,13 +86,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('syncly_session', JSON.stringify(restoredSession));
         } catch {}
       } else {
-        // Fallback to local session if valid in client context
-        const stored = typeof window !== 'undefined' ? localStorage.getItem('syncly_session') : null;
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed?.user?.id && parsed?.user?.email) {
-            setSession(parsed);
-          } else {
+        // Fallback to local session or syncly_user if valid in client context
+        const storedSession = typeof window !== 'undefined' ? localStorage.getItem('syncly_session') : null;
+        const storedUser = typeof window !== 'undefined' ? localStorage.getItem('syncly_user') : null;
+        const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('active_tenant_id') || '00000000-0000-0000-0000-000000000001') : '00000000-0000-0000-0000-000000000001';
+
+        if (storedSession) {
+          try {
+            const parsed = JSON.parse(storedSession);
+            if (parsed?.user?.id && parsed?.user?.email) {
+              setSession(parsed);
+              if (parsed?.user?.id) {
+                setProfile({
+                  id: parsed.user.id,
+                  tenant_id: parsed.user.tenantId || activeTenantId,
+                  full_name: parsed.user.fullName || 'Demo Member',
+                  role: parsed.user.role || 'employee',
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                } as any);
+              }
+            } else {
+              setSession(null);
+            }
+          } catch {
+            setSession(null);
+          }
+        } else if (storedUser) {
+          try {
+            const user = JSON.parse(storedUser);
+            if (user?.id && user?.email) {
+              const demoSession: UserSession = {
+                user: {
+                  id: user.id,
+                  email: user.email,
+                  fullName: user.full_name || 'Demo Member',
+                  headline: 'Corporate Team Member',
+                  role: user.role || 'employee',
+                  tenantId: user.tenant_id || activeTenantId,
+                  hasCompletedOnboarding: true,
+                },
+                token: 'demo-access-token',
+              };
+              setSession(demoSession);
+              setProfile({
+                id: user.id,
+                tenant_id: user.tenant_id || activeTenantId,
+                full_name: user.full_name || 'Demo Member',
+                role: user.role || 'employee',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              } as any);
+            } else {
+              setSession(null);
+            }
+          } catch {
             setSession(null);
           }
         } else {

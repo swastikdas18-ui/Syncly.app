@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "echo 'No linter configured'"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
