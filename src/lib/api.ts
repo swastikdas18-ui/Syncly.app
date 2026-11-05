@@ -491,9 +491,11 @@ class SynclyApiClient {
         return;
       }
 
-      const rawTenantId = this.currentTenantId;
-      const cleanTenantId = (rawTenantId && rawTenantId !== 'undefined' && rawTenantId !== 'null' ? rawTenantId : '00000000-0000-0000-0000-000000000001').trim();
-      const sseUrl = `/api/events/stream?tenantId=${encodeURIComponent(cleanTenantId)}`;
+      const cleanTenant = (this.currentTenantId && this.currentTenantId.trim() !== '' && this.currentTenantId !== 'undefined' && this.currentTenantId !== 'null')
+        ? this.currentTenantId.trim()
+        : '00000000-0000-0000-0000-000000000001';
+      const params = new URLSearchParams({ tenantId: cleanTenant });
+      const sseUrl = `/api/events/stream?${params.toString()}`;
       const eventSource = new EventSource(sseUrl);
       this.sseSource = eventSource;
 
@@ -502,7 +504,7 @@ class SynclyApiClient {
       };
 
       eventSource.onerror = (err) => {
-        console.warn('SSE stream disconnected, closing source to prevent connection spam:', err);
+        console.warn('[SSE] EventSource closed due to error:', err);
         eventSource.close();
         if (this.sseSource === eventSource) {
           this.sseSource = null;
@@ -557,3 +559,42 @@ class SynclyApiClient {
 }
 
 export const api = new SynclyApiClient();
+
+// ✅ Clean, strict URL construction
+export function subscribeToEventsStream(
+  tenantId: string = '00000000-0000-0000-0000-000000000001',
+  onMessage?: (data: any) => void
+) {
+  if (typeof window === 'undefined') return () => {};
+
+  // 1. Sanitize tenant ID (strip whitespace and prevent non-UUID fallbacks)
+  const cleanTenant = (tenantId && tenantId.trim() !== '' && tenantId !== 'undefined' && tenantId !== 'null')
+    ? tenantId.trim()
+    : '00000000-0000-0000-0000-000000000001';
+
+  // 2. Build URL safely without manual string concatenation
+  const params = new URLSearchParams({ tenantId: cleanTenant });
+  const sseUrl = `/api/events/stream?${params.toString()}`;
+
+  // 3. Initialize EventSource
+  const eventSource = new EventSource(sseUrl);
+
+  eventSource.onmessage = (event) => {
+    try {
+      const parsed = JSON.parse(event.data);
+      if (onMessage) onMessage(parsed);
+    } catch {
+      // Keep-alive pings or raw heartbeats
+    }
+  };
+
+  // 4. Close immediately on error to avoid loop storms
+  eventSource.onerror = (err) => {
+    console.warn('[SSE] EventSource closed due to error:', err);
+    eventSource.close();
+  };
+
+  return () => {
+    eventSource.close();
+  };
+}

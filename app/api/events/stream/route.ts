@@ -3,49 +3,37 @@ import { NextRequest } from 'next/server';
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-/**
- * GET /api/events/stream
- * Server-Sent Events (SSE) streaming endpoint configured for Edge runtime.
- * Dispatches real-time events and maintains heartbeat keep-alive.
- */
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const rawParam = searchParams.get('tenantId');
-  const cleanTenantId = (rawParam && rawParam !== 'undefined' && rawParam !== 'null' ? rawParam : null) 
-    || request.headers.get('x-tenant-id') 
-    || '00000000-0000-0000-0000-000000000001';
-  const tenantId = cleanTenantId.trim();
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const rawTenantId = searchParams.get('tenantId');
+  const tenantId = (rawTenantId && rawTenantId.trim() !== '' && rawTenantId !== 'undefined' && rawTenantId !== 'null')
+    ? rawTenantId.trim()
+    : '00000000-0000-0000-0000-000000000001';
 
   const encoder = new TextEncoder();
-  let keepAliveTimer: any = null;
 
   const stream = new ReadableStream({
     start(controller) {
-      // 1. Initial handshake event
-      const initialPayload = JSON.stringify({
-        status: 'connected',
-        tenantId,
-        timestamp: new Date().toISOString(),
-      });
-      controller.enqueue(encoder.encode(`event: CONNECTED\ndata: ${initialPayload}\n\n`));
+      // Initial handshake
+      controller.enqueue(
+        encoder.encode(`event: connected\ndata: ${JSON.stringify({ tenantId, status: 'ok' })}\n\n`)
+      );
 
-      // 2. Periodic keep-alive ping to preserve stream across edge/serverless gateways
-      keepAliveTimer = setInterval(() => {
+      // Keep-alive heartbeat every 15s to keep the serverless proxy channel open
+      const interval = setInterval(() => {
         try {
-          controller.enqueue(encoder.encode(`: keep-alive ${Date.now()}\n\n`));
+          controller.enqueue(encoder.encode(`: keep-alive\n\n`));
         } catch {
-          if (keepAliveTimer) {
-            clearInterval(keepAliveTimer);
-            keepAliveTimer = null;
-          }
+          clearInterval(interval);
         }
       }, 15000);
-    },
-    cancel() {
-      if (keepAliveTimer) {
-        clearInterval(keepAliveTimer);
-        keepAliveTimer = null;
-      }
+
+      req.signal.addEventListener('abort', () => {
+        clearInterval(interval);
+        try {
+          controller.close();
+        } catch {}
+      });
     },
   });
 
@@ -58,4 +46,3 @@ export async function GET(request: NextRequest) {
     },
   });
 }
-
