@@ -1,5 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
-import { createServer as createViteServer } from 'vite';
+import next from 'next';
 import crypto from 'crypto';
 import { DEFAULT_TENANT_ID, SECONDARY_TENANT_ID, isValidUUID, resolveTenantId } from './src/lib/tenantContext.ts';
 import { SUPABASE_MIGRATION_SQL } from './src/lib/migrationSql.ts';
@@ -633,6 +633,12 @@ function broadcastToTenant(tenantId: string, eventName: string, data: unknown) {
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const dev = process.env.NODE_ENV !== 'production';
+
+  const nextApp = next({ dev, hostname: '0.0.0.0', port: PORT });
+  const handle = nextApp.getRequestHandler();
+
+  await nextApp.prepare();
 
   app.use(express.json({ limit: '25mb' }));
   app.use(express.urlencoded({ extended: true, limit: '25mb' }));
@@ -1593,21 +1599,11 @@ async function startServer() {
   });
 
   // ---------------------------------------------------------------------------
-  // VITE DEV SERVER INTEGRATION
+  // NEXT.JS APP ROUTER INTEGRATION
   // ---------------------------------------------------------------------------
-  const isProduction = process.env.NODE_ENV === 'production';
-  if (!isProduction) {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    app.use(express.static('dist'));
-    app.get('*', (_req: Request, res: Response) => {
-      res.sendFile('dist/index.html', { root: '.' });
-    });
-  }
+  app.all('*', (req: Request, res: Response) => {
+    return handle(req, res);
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Syncly Server] Multi-tenant backend running on http://0.0.0.0:${PORT}`);
