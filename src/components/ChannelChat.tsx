@@ -550,8 +550,8 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
   );
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-0 sm:py-3 sm:px-4 md:py-6 md:px-6 lg:px-8">
-      <div className="bg-white rounded-none sm:rounded-xl border-x-0 border-y sm:border border-slate-200 shadow-xs overflow-hidden flex h-[calc(100dvh-7rem-env(safe-area-inset-bottom,0px))] md:h-[calc(100dvh-8.5rem)] md:max-h-[860px] md:min-h-[500px]">
+    <div className="w-full h-full flex flex-col min-h-0">
+      <div className="bg-zinc-950 md:bg-white rounded-none sm:rounded-xl border-x-0 border-y sm:border border-zinc-800 md:border-slate-200 shadow-xs overflow-hidden flex flex-1 min-h-0 h-full">
         
         {/* DESKTOP SIDEBAR: CHANNELS & REALTIME PRESENCE */}
         <div className="hidden md:flex w-64 lg:w-72 xl:w-80 border-r border-slate-200 bg-slate-50/70 flex-col shrink-0 transition-all">
@@ -631,7 +631,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
           </div>
 
           {/* Message History Viewport */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-4 space-y-3">
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
                 <Hash className="w-10 h-10 text-slate-300 mb-2" />
@@ -694,11 +694,11 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
           </div>
 
           {/* Sticky Message Composer */}
-          <div className="p-4 border-t border-slate-200 bg-slate-50/50">
+          <div className="p-2.5 sm:p-4 border-t border-zinc-800/80 bg-zinc-900/60 backdrop-blur-lg pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-4">
             {mediaAttachments.length > 0 && (
               <div className="flex items-center gap-2 mb-2">
                 {mediaAttachments.map((url, i) => (
-                  <div key={i} className="relative group w-12 h-12 rounded-lg overflow-hidden border border-slate-200">
+                  <div key={i} className="relative group w-12 h-12 rounded-lg overflow-hidden border border-zinc-700">
                     <img src={url} alt="Attached" className="w-full h-full object-cover" />
                     <button
                       type="button"
@@ -712,7 +712,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
               </div>
             )}
 
-            <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+            <form onSubmit={handleSendMessage} className="flex items-center gap-2 max-w-4xl mx-auto">
               <input
                 type="file"
                 ref={fileInputRef}
@@ -726,7 +726,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
                 title="Attach media to message"
-                className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer touch-manipulation shrink-0"
               >
                 <ImageIcon className="w-4 h-4" />
               </button>
@@ -735,20 +735,20 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
               <div className="relative flex-1 min-w-0">
                 {/* Floating Mention Dropdown */}
                 {isMentionOpen && (
-                  <div className="absolute bottom-full left-0 mb-2 w-[calc(100vw-3rem)] sm:w-80 max-w-sm bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150">
-                    <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-500 bg-slate-50/70">
-                      <span className="font-semibold text-slate-700 flex items-center gap-1">
-                        <AtSign className="w-3 h-3 text-blue-600" />
+                  <div className="absolute bottom-full left-0 mb-2 w-[calc(100vw-3rem)] sm:w-80 max-w-sm bg-zinc-900 rounded-xl shadow-2xl border border-zinc-800 py-1.5 z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <div className="px-3 py-1.5 border-b border-zinc-800 flex items-center justify-between text-[11px] text-zinc-400 bg-zinc-950/70">
+                      <span className="font-semibold text-zinc-200 flex items-center gap-1">
+                        <AtSign className="w-3 h-3 text-indigo-400" />
                         <span>Mention a Teammate</span>
                       </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
+                      <span className="text-[10px] text-zinc-500 font-mono">
                         {filteredMentionUsers.length} in {activeTenant?.name}
                       </span>
                     </div>
 
                     <div className="max-h-56 overflow-y-auto p-1 space-y-0.5">
                       {filteredMentionUsers.length === 0 ? (
-                        <div className="px-3 py-4 text-center text-xs text-slate-400 italic">
+                        <div className="px-3 py-4 text-center text-xs text-zinc-500 italic">
                           No team members match &ldquo;{mentionQuery}&rdquo;
                         </div>
                       ) : (
@@ -764,34 +764,34 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                               type="button"
                               onMouseEnter={() => setSelectedMentionIndex(idx)}
                               onClick={() => handleSelectMention(user)}
-                              className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between text-xs transition-colors cursor-pointer ${
-                                isSelected ? 'bg-blue-50 text-blue-900' : 'hover:bg-slate-100 text-slate-800'
+                              className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between text-xs transition-colors cursor-pointer touch-manipulation min-h-[44px] ${
+                                isSelected ? 'bg-indigo-950/60 text-indigo-200' : 'hover:bg-zinc-800 text-zinc-200'
                               }`}
                             >
                               <div className="flex items-center gap-2 truncate">
                                 <div className="relative shrink-0">
-                                  <div className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold">
+                                  <div className="w-6 h-6 rounded-full bg-zinc-800 text-zinc-200 flex items-center justify-center text-[10px] font-bold">
                                     {user.initials}
                                   </div>
-                                  <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-1 ring-white ${
+                                  <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-1 ring-zinc-900 ${
                                     isOnline ? 'bg-emerald-500' :
                                     isAway ? 'bg-amber-500' :
                                     isBusy ? 'bg-rose-500' :
-                                    'bg-slate-300'
+                                    'bg-zinc-600'
                                   }`} />
                                 </div>
                                 <div className="truncate">
                                   <div className="font-semibold truncate flex items-center gap-1">
                                     <span>{user.fullName}</span>
                                   </div>
-                                  <div className="text-[10px] text-slate-400 truncate">
+                                  <div className="text-[10px] text-zinc-400 truncate">
                                     {user.role} · <span className="capitalize">{user.status}</span>
                                   </div>
                                 </div>
                               </div>
 
                               {isSelected && (
-                                <span className="text-[10px] font-mono text-blue-600 bg-blue-100/70 px-1.5 py-0.5 rounded shrink-0">
+                                <span className="text-[10px] font-mono text-indigo-400 bg-indigo-950 px-1.5 py-0.5 rounded shrink-0 border border-indigo-800">
                                   ↵ select
                                 </span>
                               )}
@@ -800,7 +800,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                         })
                       )}
                     </div>
-                    <div className="px-3 py-1 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+                    <div className="px-3 py-1 bg-zinc-950 border-t border-zinc-800 text-[10px] text-zinc-500 flex items-center justify-between">
                       <span>Use ↑↓ to navigate</span>
                       <span>↵ or Tab to select</span>
                     </div>
@@ -810,21 +810,20 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                 <input
                   ref={textInputRef}
                   type="text"
-                  placeholder={`Message #${currentChannel?.name || 'channel'} (@ to mention)...`}
+                  placeholder={`Message #${currentChannel?.name || 'channel'}...`}
                   value={inputContent}
                   onChange={handleInputChange}
                   onKeyDown={handleInputKeyDown}
-                  className="w-full px-3 py-2 text-sm sm:text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-blue-500"
+                  className="flex-1 w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={!inputContent.trim() && mediaAttachments.length === 0}
-                className="px-3 sm:px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-lg transition-colors flex items-center gap-1.5 shrink-0"
+                className="p-2.5 min-w-[44px] min-h-[44px] bg-indigo-600 active:scale-95 text-white rounded-xl shrink-0 transition-colors disabled:opacity-40 flex items-center justify-center cursor-pointer touch-manipulation"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span className="hidden xs:inline">Send</span>
+                <Send className="w-4 h-4" />
               </button>
             </form>
           </div>

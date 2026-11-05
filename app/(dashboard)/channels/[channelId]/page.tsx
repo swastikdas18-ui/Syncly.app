@@ -56,7 +56,7 @@ export default function ChannelDashboardPage() {
   };
 
   return (
-    <div className="w-full h-[calc(100vh-8rem)]">
+    <div className="flex flex-col h-[calc(100dvh-3.5rem)] md:h-[calc(100vh-5rem)] bg-zinc-950">
       <ChatWindow
         channels={channels}
         activeChannelId={activeChannel}

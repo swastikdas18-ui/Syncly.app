@@ -290,8 +290,8 @@ export const PostFeed: React.FC<PostFeedProps> = ({
           </div>
         )}
 
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-1 p-1 bg-slate-100/90 rounded-xl overflow-x-auto no-scrollbar border border-slate-200/60">
+        {/* Category Filter Horizontal Rail */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 -mx-3 px-3 sm:mx-0 sm:px-0 scroll-smooth">
           {CATEGORIES.map((cat) => {
             const isActive = selectedCategory === cat.key;
             const count = cat.key === 'all'
@@ -303,14 +303,14 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                 key={cat.id}
                 type="button"
                 onClick={() => setSelectedCategory(cat.key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all min-h-[36px] sm:min-h-0 flex items-center gap-1.5 cursor-pointer touch-manipulation ${
                   isActive
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
                 }`}
               >
                 <span>{cat.label}</span>
-                <span className={`text-[11px] font-mono ${isActive ? 'text-blue-600 font-semibold' : 'text-slate-400'}`}>
+                <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${isActive ? 'bg-indigo-700/80 text-white' : 'bg-zinc-800 text-zinc-400'}`}>
                   {count}
                 </span>
               </button>

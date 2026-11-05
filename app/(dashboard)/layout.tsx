@@ -24,10 +24,10 @@ export default function DashboardLayout({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-zinc-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
-          <p className="text-xs font-medium text-slate-500">Verifying session...</p>
+          <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+          <p className="text-xs font-medium text-zinc-400">Verifying session...</p>
         </div>
       </div>
     );
@@ -38,7 +38,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+    <div className="flex flex-col min-h-dvh bg-zinc-950 text-zinc-100 overflow-x-hidden font-sans">
       <Header
         currentSession={
           profile
@@ -58,7 +58,7 @@ export default function DashboardLayout({
         }
         onNavigate={(path) => router.push(path.startsWith('/') ? path : `/${path}`)}
       />
-      <main className="flex-1 w-full pb-20 md:pb-8">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 pt-14 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:py-6 md:pb-6">
         {children}
       </main>
       <BottomNav
