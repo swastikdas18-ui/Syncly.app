@@ -500,8 +500,8 @@ export function ProfileView({
           </div>
 
           <div className="pt-2 border-t border-zinc-800/80 space-y-1 text-xs font-mono">
-            <div className="text-zinc-500">Tenant Slug: <span className="text-zinc-300">{currentTenant?.slug || 'active'}</span></div>
-            <div className="text-zinc-500 truncate">Tenant UUID: <span className="text-zinc-300">{currentTenant?.id || 'default'}</span></div>
+            <div className="text-zinc-500">Tenant Slug: <span className="text-zinc-300">{currentTenant?.slug || 'acme-corp'}</span></div>
+            <div className="text-zinc-500 truncate">Tenant UUID: <span className="text-zinc-300">{currentTenant?.id || '00000000-0000-0000-0000-000000000001'}</span></div>
           </div>
 
           <div className="pt-2">

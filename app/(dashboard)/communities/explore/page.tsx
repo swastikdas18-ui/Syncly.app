@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { useWorkspace, DEFAULT_WORKSPACE } from '@/lib/context/WorkspaceContext.tsx';
+import { useTenant } from '@/lib/context/AuthContext.tsx';
 
 interface Community {
   id: string;
@@ -39,7 +42,45 @@ const DEFAULT_COMMUNITIES: Community[] = [
 ];
 
 export function ExploreCommunitiesView({ initialCommunities = DEFAULT_COMMUNITIES }: { initialCommunities?: Community[] }) {
+  const router = useRouter();
+  const { activeCommunity, switchCommunity } = useWorkspace();
+  const { activeTenant, setActiveTenant } = useTenant();
   const [searchQuery, setSearchQuery] = useState('');
+
+  const activeWorkspaceId = activeTenant?.id || activeCommunity?.id || DEFAULT_WORKSPACE.id;
+
+  const handleSwitchOrJoin = (community: Community) => {
+    // 1. Update Contexts
+    switchCommunity(community.id);
+    setActiveTenant({
+      id: community.id,
+      name: community.name,
+      slug: community.slug,
+      created_at: new Date().toISOString(),
+    });
+
+    // 2. Set Cookies and LocalStorage
+    localStorage.setItem('active_tenant_id', community.id);
+    localStorage.setItem('active_community_id', community.id);
+    localStorage.setItem('x-tenant-id', community.id);
+    localStorage.setItem(
+      'syncly_workspace',
+      JSON.stringify({
+        id: community.id,
+        name: community.name,
+        slug: community.slug,
+        role: 'member',
+      })
+    );
+    document.cookie = `active_tenant_id=${community.id}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `active_community_id=${community.id}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `x-tenant-id=${community.id}; path=/; max-age=86400; SameSite=Lax`;
+
+    window.dispatchEvent(new Event('workspace-changed'));
+
+    // 3. Route to /feed under chosen workspace
+    router.push('/feed');
+  };
 
   const filteredCommunities = useMemo(() => {
     if (!searchQuery.trim()) return initialCommunities;
@@ -72,9 +113,28 @@ export function ExploreCommunitiesView({ initialCommunities = DEFAULT_COMMUNITIE
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredCommunities.map((community) => (
-            <div key={community.id} className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/40">
-              <h3 className="font-semibold text-zinc-100">{community.name}</h3>
-              <p className="text-xs text-zinc-400 mt-1">{community.description}</p>
+            <div key={community.id} className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/40 flex flex-col justify-between">
+              <div>
+                <h3 className="font-semibold text-zinc-100">{community.name}</h3>
+                <p className="text-xs text-zinc-400 mt-1">{community.description}</p>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-zinc-800 flex items-center justify-between">
+                <span className="text-xs text-zinc-500 font-mono">@{community.slug}</span>
+                {community.id === activeWorkspaceId ? (
+                  <span className="px-3 py-1 rounded-lg bg-zinc-800 text-xs font-semibold text-emerald-400 border border-emerald-500/20">
+                    Current Workspace
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchOrJoin(community)}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white transition-colors cursor-pointer"
+                  >
+                    Enter Workspace
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
