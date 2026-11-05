@@ -317,3 +317,21 @@ export function useTenant() {
     setActiveTenant: context.setActiveTenant,
   };
 }
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return {
+    user: context.session?.user || null,
+    profile: context.profile,
+    session: context.session,
+    isAuthenticated: context.isAuthenticated,
+    isLoading: context.isLoading,
+    signOut: context.signOut,
+    refreshSession: context.refreshSession,
+    setActiveTenant: context.setActiveTenant,
+    activeTenant: context.activeTenant,
+  };
+}

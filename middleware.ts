@@ -12,6 +12,7 @@ export function middleware(req: NextRequest) {
     pathname.startsWith('/channels') ||
     pathname.startsWith('/events') ||
     pathname.startsWith('/profile') ||
+    pathname.startsWith('/search') ||
     pathname.startsWith('/admin')
   );
 
