@@ -439,8 +439,13 @@ WITH CHECK (
     WHERE t.id = memberships.community_id
       AND (
         t.requires_approval = false 
-        OR auth.jwt() ->> 'email' LIKE ANY(
-          SELECT '%' || d FROM unnest(t.allowed_domains) AS d
+        OR (
+          auth.jwt() ->> 'email' IS NOT NULL
+          AND (auth.jwt() ->> 'email') ~ '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+          AND LOWER(TRIM(SPLIT_PART(auth.jwt() ->> 'email', '@', 2))) = ANY (
+            SELECT LOWER(TRIM(LEADING '@' FROM TRIM(d)))
+            FROM unnest(t.allowed_domains) AS d
+          )
         )
       )
   )
