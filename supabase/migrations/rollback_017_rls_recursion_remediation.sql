@@ -1,5 +1,5 @@
 -- ==============================================================================
--- SYNCLY / WORK-CONNECT: ROLLBACK FOR 017_rls_recursion_remediation.sql
+-- SYNCLY / WORK-CONNECT: ROLLBACK FOR 017_rls_recursion_remediation.sql (REVISED)
 -- ==============================================================================
 
 DROP POLICY IF EXISTS "Admins can view community join requests" ON public.community_join_requests;
@@ -69,5 +69,6 @@ CREATE POLICY "Users can view their own memberships"
 ON public.memberships FOR SELECT
 USING (user_id = auth.uid());
 
-DROP FUNCTION IF EXISTS public.is_community_intern(UUID);
-DROP FUNCTION IF EXISTS public.is_community_admin(UUID);
+DROP FUNCTION IF EXISTS private.is_community_intern(UUID);
+DROP FUNCTION IF EXISTS private.is_community_admin(UUID);
+DROP SCHEMA IF EXISTS private;
