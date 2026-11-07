@@ -55,7 +55,9 @@ export async function getVerifiedAuthContext(req?: NextRequest): Promise<Verifie
     const supabase = await createClient(req);
 
     // 1. Authoritative identity verification via Supabase Auth server
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const authHeader = req?.headers.get('authorization');
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined;
+    const { data: { user }, error: authError } = bearerToken ? await supabase.auth.getUser(bearerToken) : await supabase.auth.getUser();
 
     if (authError || !user) {
       return unauthorizedResult(authError?.message || 'Unauthorized. Valid Supabase session required.');
