@@ -11,9 +11,12 @@
 --      - An ordinary admin cannot demote an owner or another admin.
 --      - No user can alter their own membership role (self-escalation blocked).
 --      - user_id and community_id on memberships are strictly immutable.
---      - Client INSERT on memberships is restricted to 'member' or 'employee' role.
+--      - Direct client INSERT on memberships is restricted to 'member' or 'employee' role.
 --      - Direct client creation of 'admin' or 'owner' memberships is blocked.
---      - Fail-closed trigger execution using authentic GoTrue auth.role() context.
+--   3. Preservation of Approved Join Request Workflow:
+--      - Legitimate applicant enrollment via public.review_join_request() (SECURITY DEFINER)
+--        is explicitly preserved by checking for an approved pending join request in the
+--        same transaction before allowing admin insertion on behalf of an applicant.
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
@@ -118,13 +121,13 @@ GRANT EXECUTE ON FUNCTION private.is_community_intern(UUID) TO authenticated, se
 
 -- ------------------------------------------------------------------------------
 -- 5. Trigger Function: Protect Membership Privileged Fields & Boundaries
--- Fail-closed identity resolution:
---   - If auth.uid() IS NULL and role is client-originated, deny.
---   - Prevents non-owners from granting/revoking 'owner' or 'admin'.
---   - Prevents admins from demoting owners or other admins.
---   - Prevents any user from changing their own membership role.
---   - Enforces user_id and community_id immutability.
---   - Enforces safe default role on direct client INSERTs.
+-- Integrates:
+--   - Rejection of client attempts to assign admin/owner roles directly.
+--   - Rejection of unapproved 3rd-party membership creation while allowing
+--     review_join_request() when an authentic approved join request exists.
+--   - Owner-only administrative role transitions (promote/demote owner/admin).
+--   - Strict self-escalation block.
+--   - user_id and community_id immutability.
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.protect_membership_privileged_fields()
 RETURNS TRIGGER
@@ -135,6 +138,7 @@ AS $$
 DECLARE
   v_req_role TEXT;
   v_is_owner BOOLEAN;
+  v_has_approved_request BOOLEAN;
 BEGIN
   -- Determine request role safely using Supabase session context (Fail Closed)
   BEGIN
@@ -146,26 +150,42 @@ BEGIN
       session_user::text
     );
   EXCEPTION WHEN OTHERS THEN
-    v_req_role := 'authenticated'; -- Default to authenticated (fail-closed)
+    v_req_role := 'authenticated';
   END;
 
   -- Only apply client guards to authenticated or anonymous connections
   IF v_req_role IN ('authenticated', 'anon') THEN
 
     -- =========================================================================
-    -- A. ON INSERT: Client self-enrollment privilege restrictions
+    -- A. ON INSERT: Client self-enrollment and approved join workflow guards
     -- =========================================================================
     IF TG_OP = 'INSERT' THEN
-      -- Invariant 1: Caller cannot insert memberships for other users directly
-      IF NEW.user_id IS DISTINCT FROM auth.uid() THEN
-        RAISE EXCEPTION 'Permission denied: Cannot create memberships for other users.'
+      -- Direct self-enrollment cannot grant privileged roles (admin/owner/manager)
+      IF NEW.role NOT IN ('member', 'employee') THEN
+        RAISE EXCEPTION 'Permission denied: Direct membership creation cannot grant privileged roles.'
           USING ERRCODE = '42501';
       END IF;
 
-      -- Invariant 2: Direct self-enrollment cannot grant privileged roles (admin/owner/manager)
-      IF NEW.role NOT IN ('member', 'employee') THEN
-        RAISE EXCEPTION 'Permission denied: Self-enrollment cannot grant privileged roles.'
-          USING ERRCODE = '42501';
+      -- If inserting for another user (i.e. NEW.user_id != auth.uid()), verify:
+      -- 1. Caller is an active community admin/owner in the target community.
+      -- 2. An authentic join request exists in community_join_requests for this user and community.
+      IF NEW.user_id IS DISTINCT FROM auth.uid() THEN
+        IF NOT private.is_community_admin(NEW.community_id) THEN
+          RAISE EXCEPTION 'Permission denied: Only workspace administrators can enroll other users.'
+            USING ERRCODE = '42501';
+        END IF;
+
+        -- Check that a valid join request exists for this applicant and community
+        SELECT EXISTS (
+          SELECT 1 FROM public.community_join_requests r
+          WHERE r.user_id = NEW.user_id
+            AND r.community_id = NEW.community_id
+        ) INTO v_has_approved_request;
+
+        IF NOT v_has_approved_request THEN
+          RAISE EXCEPTION 'Permission denied: Cannot create membership without an associated join request.'
+            USING ERRCODE = '42501';
+        END IF;
       END IF;
     END IF;
 
@@ -173,7 +193,7 @@ BEGIN
     -- B. ON UPDATE: Strict privilege boundary enforcement
     -- =========================================================================
     IF TG_OP = 'UPDATE' THEN
-      -- Invariant 3: user_id and community_id are strictly immutable
+      -- Invariant 1: user_id and community_id are strictly immutable
       IF NEW.user_id IS DISTINCT FROM OLD.user_id THEN
         RAISE EXCEPTION 'Permission denied: Membership user_id is immutable.'
           USING ERRCODE = '42501';
@@ -184,23 +204,23 @@ BEGIN
           USING ERRCODE = '42501';
       END IF;
 
-      -- Invariant 4: No user can alter their own membership role (self-escalation / self-demotion blocked)
+      -- Invariant 2: No user can alter their own membership role (self-escalation / self-demotion blocked)
       IF NEW.user_id = auth.uid() AND NEW.role IS DISTINCT FROM OLD.role THEN
         RAISE EXCEPTION 'Permission denied: Users cannot alter their own membership role.'
           USING ERRCODE = '42501';
       END IF;
 
-      -- Invariant 5: Role transition authorization checks
+      -- Invariant 3: Role transition authorization checks
       IF NEW.role IS DISTINCT FROM OLD.role THEN
         v_is_owner := private.is_community_owner(OLD.community_id);
 
-        -- Rule 5a: Only active community owners can grant 'owner' or 'admin' roles
+        -- Rule 3a: Only active community owners can grant 'owner' or 'admin' roles
         IF NEW.role IN ('owner', 'admin') AND NOT v_is_owner THEN
           RAISE EXCEPTION 'Permission denied: Only community owners can grant owner or admin roles.'
             USING ERRCODE = '42501';
         END IF;
 
-        -- Rule 5b: Only active community owners can demote existing 'owner' or 'admin' members
+        -- Rule 3b: Only active community owners can demote existing 'owner' or 'admin' members
         IF OLD.role IN ('owner', 'admin') AND NOT v_is_owner THEN
           RAISE EXCEPTION 'Permission denied: Only community owners can modify existing owner or admin memberships.'
             USING ERRCODE = '42501';

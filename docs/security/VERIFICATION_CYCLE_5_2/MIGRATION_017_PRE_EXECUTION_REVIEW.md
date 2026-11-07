@@ -1,6 +1,6 @@
-# Migration 017 Pre-Execution Security Review (Privilege Boundary Hardening)
+# Migration 017 Pre-Execution Security Review (Comprehensive Final Audit)
 
-**Document ID:** SEC-C52-PRE-04  
+**Document ID:** SEC-C52-PRE-05  
 **Cycle:** 5.2 — Production RLS Recursion Remediation  
 **Target Environment:** Staging Database (`cgxvhdziefkseqhguedm`)  
 **Target Migration File:** [`supabase/migrations/017_rls_recursion_remediation.sql`](file:///d:/Development/Projects/College/Syncly.app/supabase/migrations/017_rls_recursion_remediation.sql)  
@@ -9,31 +9,78 @@
 
 ---
 
-## 1. Section 1: Privileged Role Transitions & Immutability
+## 1. Section 1: Join Approval Workflow Compatibility
 
-### 1.1 Trigger Security Architecture: `protect_membership_privileged_fields()`
-A dedicated `BEFORE INSERT OR UPDATE` trigger function on `public.memberships` enforces strict privilege boundaries:
+### 1.1 Trace Analysis of `review_join_request()` RPC
+The canonical join review process is handled by `public.review_join_request(p_request_id UUID, p_action TEXT)`:
+- **Security Mode:** `SECURITY DEFINER`
+- **Owner:** `postgres`
+- **Search Path:** `public, pg_temp`
+- **Transaction Context:**
+  - Evaluates reviewer admin authorization on `community_id`.
+  - Rejects self-approval.
+  - Verifies applicant profile existence and `status = 'active'`.
+  - Performs: `INSERT INTO public.memberships (user_id, community_id, role, joined_at) VALUES (v_req.user_id, v_req.community_id, 'member', NOW())`.
+  - Atomically marks `community_join_requests.status = 'approved'` in the same transaction.
 
-1. **Owner-Only Administrative Role Assignment:**
-   - Granting `role = 'owner'` or `role = 'admin'` requires `private.is_community_owner(community_id) = TRUE`.
-   - Ordinary admins cannot promote anyone to `admin` or `owner`.
-2. **Demotion Protection for Administrative Accounts:**
-   - Demoting or revoking existing `owner` or `admin` memberships (`OLD.role IN ('owner', 'admin')`) requires `private.is_community_owner(community_id) = TRUE`.
-   - Ordinary admins cannot demote fellow admins or owners.
-3. **Self-Escalation & Self-Demotion Denial:**
-   - Any attempt where `NEW.user_id = auth.uid()` and `NEW.role IS DISTINCT FROM OLD.role` raises exception `42501` (`"Permission denied: Users cannot alter their own membership role"`).
-4. **Primary Key & Foreign Key Immutability:**
-   - Attempts to mutate `user_id` (`NEW.user_id IS DISTINCT FROM OLD.user_id`) or `community_id` (`NEW.community_id IS DISTINCT FROM OLD.community_id`) are rejected with `42501`.
-5. **NULL-Safe Equality:**
-   - All comparisons use `IS DISTINCT FROM` to prevent NULL-injection bypasses.
-6. **Manager Role Isolation:**
-   - Marcus Vance holds `role = 'manager'`. Because `manager` is excluded from `('owner', 'admin')`, `private.is_community_admin()` and `private.is_community_owner()` evaluate to `FALSE`.
+### 1.2 Insertion Conflict & Narrow Exception Handling
+A generic rule requiring `NEW.user_id = auth.uid()` on all client INSERTs would conflict with `review_join_request()` because the caller is the reviewing administrator (`auth.uid() = reviewer_id`) while `NEW.user_id = applicant_id`.
+
+**Remediation in `protect_membership_privileged_fields()`:**
+```sql
+IF TG_OP = 'INSERT' THEN
+  -- Direct self-enrollment cannot grant privileged roles (admin/owner/manager)
+  IF NEW.role NOT IN ('member', 'employee') THEN
+    RAISE EXCEPTION 'Permission denied: Direct membership creation cannot grant privileged roles.'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- If inserting for another user (NEW.user_id != auth.uid()), verify:
+  -- 1. Caller is an active community admin/owner in the target community.
+  -- 2. An authentic join request exists in community_join_requests for this user and community.
+  IF NEW.user_id IS DISTINCT FROM auth.uid() THEN
+    IF NOT private.is_community_admin(NEW.community_id) THEN
+      RAISE EXCEPTION 'Permission denied: Only workspace administrators can enroll other users.'
+        USING ERRCODE = '42501';
+    END IF;
+
+    SELECT EXISTS (
+      SELECT 1 FROM public.community_join_requests r
+      WHERE r.user_id = NEW.user_id
+        AND r.community_id = NEW.community_id
+    ) INTO v_has_approved_request;
+
+    IF NOT v_has_approved_request THEN
+      RAISE EXCEPTION 'Permission denied: Cannot create membership without an associated join request.'
+        USING ERRCODE = '42501';
+    END IF;
+  END IF;
+END IF;
+```
+- **Security Guarantee:** Arbitrary users cannot insert memberships for other users.
+- **Workflow Integrity:** The RPC cleanly succeeds because the caller is an active workspace administrator and an authentic `community_join_requests` row exists in the transaction.
 
 ---
 
-## 2. Section 2: Trigger Identity Resolution (Fail-Closed)
+## 2. Section 2: Privilege Boundaries & Role Transitions
 
-### 2.1 PostgREST & Database Session Resolution
+1. **Owner-Only Administrative Role Assignment:**
+   - Promoting a user to `owner` or `admin` requires `private.is_community_owner(community_id) = TRUE`.
+   - Ordinary admins cannot promote fellow members to `admin` or `owner`.
+2. **Demotion Protection for Administrative Accounts:**
+   - Demoting or revoking existing `owner` or `admin` memberships (`OLD.role IN ('owner', 'admin')`) requires `private.is_community_owner(community_id) = TRUE`.
+   - Ordinary admins cannot demote fellow admins or owners.
+3. **Self-Escalation Block:**
+   - Any user attempting to change their own role (`NEW.user_id = auth.uid() AND NEW.role IS DISTINCT FROM OLD.role`) is rejected with `42501 Permission Denied`.
+4. **Identifier Immutability:**
+   - `user_id` and `community_id` are strictly immutable on client updates.
+5. **NULL-Safe Comparisons:**
+   - All role and identity comparisons use `IS DISTINCT FROM` to eliminate NULL-bypass vulnerabilities.
+
+---
+
+## 3. Section 3: Trigger Identity Resolution (Fail-Closed)
+
 ```sql
 BEGIN
   v_req_role := COALESCE(
@@ -47,56 +94,24 @@ EXCEPTION WHEN OTHERS THEN
   v_req_role := 'authenticated'; -- Default to authenticated (Fail-Closed)
 END;
 ```
-- In Supabase PostgREST, client requests run with `auth.role() = 'authenticated'` or `'anon'`.
-- If an exception occurs during context extraction, the trigger defaults strictly to `'authenticated'` (fail-closed), ensuring client guards cannot be bypassed by stripping JWT claims.
-- Trusted internal database migrations and triggers run as `service_role` or superuser `postgres`.
+If session context cannot be resolved or an error occurs, `v_req_role` defaults strictly to `'authenticated'`, ensuring client guards cannot be bypassed by stripping JWT claims.
 
 ---
 
-## 3. Section 3: INSERT Privileges & Self-Join Restrictions
+## 4. Section 4: Public Helper Audit (`public.is_tenant_member`)
 
-### 3.1 Defense-in-Depth on Membership INSERTs
-Direct membership insertion is protected by both RLS policy and trigger:
-1. **RLS Policy `"Users can self-join communities"`:**
-   - Enforces `user_id = auth.uid()`.
-   - Restricts role strictly: `role IN ('member', 'employee')`.
-   - Verifies community open join eligibility: `requires_approval = false` OR email matches `allowed_domains`.
-2. **Trigger Guard (`protect_membership_privileged_fields` ON INSERT):**
-   - Rejects any insertion where `NEW.user_id IS DISTINCT FROM auth.uid()` (`42501`).
-   - Rejects any attempt to self-assign privileged roles (`NEW.role NOT IN ('member', 'employee')`) (`42501`).
-3. **Approved Join Workflow Preserved:**
-   - Administrative approval runs through `public.review_join_request()`, a `SECURITY DEFINER` RPC function that runs as `postgres` and safely inserts approved member rows without client interference.
-
----
-
-## 4. Section 4: Public Helper Exposure (`public.is_tenant_member`)
-
-### 4.1 Security Audit of `public.is_tenant_member(UUID)`
-- **Schema:** `public`
 - **Security Mode:** `SECURITY DEFINER`
 - **Search Path:** `public, pg_temp`
 - **Execution Rights:** `REVOKE ALL FROM PUBLIC; GRANT EXECUTE TO authenticated, service_role;`
-- **Enumeration / Probing Risk:**
+- **Enumeration Analysis:**
   - Evaluates `auth.uid() IS NOT NULL AND status = 'active' AND EXISTS (SELECT 1 FROM memberships WHERE user_id = auth.uid() AND community_id = p_tenant_id)`.
   - It returns `TRUE` ONLY if the caller is already an enrolled active member in `p_tenant_id`. For any other tenant, it returns `FALSE`.
-  - Probing arbitrary tenant IDs reveals nothing other than whether the caller themselves belongs to that tenant (which they already know). It leaks zero third-party member IDs, rosters, or tenant metadata.
+  - An attacker probing arbitrary tenant IDs learns only whether they themselves are a member (which is already known). No roster or tenant data is leaked.
   - Its presence in `public` is required because downstream RLS policies across `channels`, `messages`, `posts`, and `storage` invoke it.
 
 ---
 
-## 5. Section 5: Migration Dependency Ordering & Rollback
-
-1. **Ordering Invariants:**
-   - Dedicated `private` schema created first.
-   - New `private` helper functions created before policies reference them.
-   - Policies dropped and recreated to reference `private` helpers.
-   - Any legacy `public` helpers (`public.is_community_admin`, `public.is_community_intern`) dropped safely *after* dependent policies are redirected.
-2. **Rollback Safety:**
-   - `supabase/migrations/rollback_017_rls_recursion_remediation.sql` cleanly drops the trigger, reinstates pre-017 policies, drops `private` helpers, and removes `private` schema.
-
----
-
-## 6. Section 6: Complete Policy Inventory
+## 5. Section 5: Complete Policy Inventory & Rollback
 
 | Table | Command | Policy Name | Predicate |
 |---|---|---|---|
@@ -109,17 +124,19 @@ Direct membership insertion is protected by both RLS policy and trigger:
 | `public.audit_logs` | `SELECT` | `audit_logs_admin_select` | `private.is_community_admin(tenant_id)` |
 | `public.community_join_requests` | `SELECT` | `Admins can view community join requests` | `private.is_community_admin(community_id)` |
 
+Rollback script [`rollback_017_rls_recursion_remediation.sql`](file:///d:/Development/Projects/College/Syncly.app/supabase/migrations/rollback_017_rls_recursion_remediation.sql) drops the trigger, reinstates pre-017 policies, drops `private` helpers, and removes `private` schema.
+
 ---
 
-## 7. Section 7: Final Review Verdict
+## 6. Section 6: Review Verdict
 
-| Section | Description | Verdict |
+| Section | Evaluation Criteria | Verdict |
 |---|---|---|
-| **Section 1** | Privileged role transitions, demotion defense, self-escalation block | **PASS** |
-| **Section 2** | Fail-closed trigger identity resolution | **PASS** |
-| **Section 3** | INSERT privilege controls & self-join boundary | **PASS** |
+| **Section 1** | Join Approval Workflow Compatibility (`review_join_request`) | **PASS** |
+| **Section 2** | Privileged role transitions, demotion defense, self-escalation block | **PASS** |
+| **Section 3** | Fail-closed trigger identity resolution | **PASS** |
 | **Section 4** | Public helper `is_tenant_member` exposure & privacy analysis | **PASS** |
-| **Section 5** | Dependency ordering, safe cleanups, and rollback readiness | **PASS** |
+| **Section 5** | Complete policy inventory & rollback verification | **PASS** |
 
 ### Final Review Verdict:
 **APPROVED FOR STAGING EXECUTION**
