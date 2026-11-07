@@ -437,8 +437,10 @@ WITH CHECK (
   AND EXISTS (
     SELECT 1 FROM public.tenants AS t
     WHERE t.id = memberships.community_id
+      AND t.requires_approval = false
       AND (
-        t.requires_approval = false 
+        t.allowed_domains IS NULL 
+        OR cardinality(t.allowed_domains) = 0
         OR (
           auth.jwt() ->> 'email' IS NOT NULL
           AND (auth.jwt() ->> 'email') ~ '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
