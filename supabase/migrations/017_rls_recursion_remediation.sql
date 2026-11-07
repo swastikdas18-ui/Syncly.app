@@ -270,8 +270,8 @@ BEGIN
     );
   END IF;
 
-  -- 2. Validate action input
-  IF p_action NOT IN ('approve', 'reject') THEN
+  -- 2. Validate action input (explicitly reject NULL and non-whitelisted actions)
+  IF p_action IS NULL OR p_action NOT IN ('approve', 'reject') THEN
     RETURN jsonb_build_object(
       'success', false,
       'status', 400,
@@ -306,12 +306,12 @@ BEGIN
     );
   END IF;
 
-  -- 5. Validate request is currently pending
-  IF v_req.status != 'pending' THEN
+  -- 5. Validate request is currently pending (Reject NULL or unexpected status safely)
+  IF v_req.status IS DISTINCT FROM 'pending' THEN
     RETURN jsonb_build_object(
       'success', false,
       'status', 409,
-      'error', 'Join request is already ' || v_req.status || '.'
+      'error', 'Join request is already ' || COALESCE(v_req.status, 'unknown') || '.'
     );
   END IF;
 
@@ -357,12 +357,7 @@ BEGIN
     LIMIT 1;
 
     IF v_existing_membership_id IS NOT NULL THEN
-      UPDATE public.community_join_requests
-      SET status = 'approved',
-          reviewed_by = v_caller_id,
-          reviewed_at = NOW()
-      WHERE id = p_request_id;
-
+      -- Do NOT modify request status, reviewed_by, or reviewed_at on conflict
       RETURN jsonb_build_object(
         'success', false,
         'status', 409,
