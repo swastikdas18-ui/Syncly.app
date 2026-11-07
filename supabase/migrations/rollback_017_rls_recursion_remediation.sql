@@ -5,6 +5,14 @@
 DROP TRIGGER IF EXISTS trg_protect_membership_privileged_fields ON public.memberships;
 DROP FUNCTION IF EXISTS public.protect_membership_privileged_fields();
 
+DROP POLICY IF EXISTS "Users can create own join requests" ON public.community_join_requests;
+CREATE POLICY "Users can create own join requests"
+ON public.community_join_requests FOR INSERT
+WITH CHECK (
+  user_id = auth.uid()
+  AND status = 'pending'
+);
+
 DROP POLICY IF EXISTS "Admins can view community join requests" ON public.community_join_requests;
 CREATE POLICY "Admins can view community join requests"
 ON public.community_join_requests FOR SELECT

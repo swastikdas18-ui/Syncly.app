@@ -483,9 +483,33 @@ CREATE POLICY audit_logs_admin_select ON public.audit_logs
   );
 
 -- ------------------------------------------------------------------------------
--- 11. Refactor Policy on public.community_join_requests (SELECT)
+-- 11. Refactor Policy on public.community_join_requests (SELECT & INSERT)
 -- ------------------------------------------------------------------------------
 DROP POLICY IF EXISTS "Admins can view community join requests" ON public.community_join_requests;
 CREATE POLICY "Admins can view community join requests"
 ON public.community_join_requests FOR SELECT
 USING (private.is_community_admin(community_id));
+
+DROP POLICY IF EXISTS "Users can create own join requests" ON public.community_join_requests;
+CREATE POLICY "Users can create own join requests"
+ON public.community_join_requests FOR INSERT
+WITH CHECK (
+  user_id = auth.uid()
+  AND status = 'pending'
+  AND EXISTS (
+    SELECT 1 FROM public.tenants AS t
+    WHERE t.id = community_join_requests.community_id
+      AND (
+        t.allowed_domains IS NULL 
+        OR cardinality(t.allowed_domains) = 0
+        OR (
+          auth.jwt() ->> 'email' IS NOT NULL
+          AND (auth.jwt() ->> 'email') ~ '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+          AND LOWER(TRIM(SPLIT_PART(auth.jwt() ->> 'email', '@', 2))) = ANY (
+            SELECT LOWER(TRIM(LEADING '@' FROM TRIM(d)))
+            FROM unnest(t.allowed_domains) AS d
+          )
+        )
+      )
+  )
+);

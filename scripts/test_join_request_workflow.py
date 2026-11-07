@@ -375,13 +375,39 @@ def run_tests():
         simulate_self_join_rls("newhire@globextech.com", ["globextech.com"], True) is False
     )
 
+    # Function to simulate community_join_requests INSERT RLS
+    def simulate_join_request_rls(caller_id, status, email, allowed_domains):
+        if not caller_id:
+            return False
+        if status != 'pending':
+            return False
+        if not allowed_domains or len(allowed_domains) == 0:
+            return True
+        if not email or not isinstance(email, str):
+            return False
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+            return False
+        parts = email.split('@')
+        if len(parts) != 2:
+            return False
+        user_domain = parts[1].strip().lower()
+        normalized_stored = [re.sub(r'^@', '', d.strip().lower()) for d in allowed_domains]
+        return user_domain in normalized_stored
+
     # Adversarial Scenario 3: Globex allowed-domain email: can queue join request
     check(
         "ADV-03",
         "UNIT_INTEGRATION_TEST",
         "Globex allowed-domain email (requires_approval=true): join request can be queued",
-        # In Syncly, community_join_requests INSERT policy permits user_id = auth.uid() and status = 'pending'
-        True is True
+        simulate_join_request_rls("u_applicant", "pending", "newhire@globextech.com", ["globextech.com"]) is True
+    )
+
+    # Adversarial Scenario 3b: Globex unapproved domain email: join request rejected at RLS level
+    check(
+        "ADV-03b",
+        "UNIT_INTEGRATION_TEST",
+        "Globex unapproved domain email: join request rejected at RLS level",
+        simulate_join_request_rls("u_applicant", "pending", "attacker@evil.com", ["globextech.com"]) is False
     )
 
     # Adversarial Scenario 4: Globex request pending: direct membership insertion fails
