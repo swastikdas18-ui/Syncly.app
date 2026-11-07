@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Tenant } from '@/src/types.ts';
 import { api } from '@/src/lib/api.ts';
-import { DEFAULT_TENANT_ID, INITIAL_TENANTS } from '@/src/lib/tenantContext.ts';
+import { INITIAL_TENANTS } from '@/src/lib/tenantContext.ts';
 
 export interface JoinedCommunity extends Tenant {
   userRole?: string;
@@ -29,15 +29,6 @@ export const DEFAULT_WORKSPACE = {
   role: 'owner',
 };
 
-const DEFAULT_WORKSPACE_STATE: JoinedCommunity = {
-  ...INITIAL_TENANTS[0],
-  id: DEFAULT_WORKSPACE.id,
-  name: DEFAULT_WORKSPACE.name,
-  slug: DEFAULT_WORKSPACE.slug,
-  userRole: DEFAULT_WORKSPACE.role,
-  isMember: true,
-};
-
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
 
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCommunityId?: string }> = ({
@@ -46,23 +37,32 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
 }) => {
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const [allCommunities, setAllCommunities] = useState<Tenant[]>(INITIAL_TENANTS);
-  const [joinedCommunities, setJoinedCommunities] = useState<JoinedCommunity[]>([
-    { ...INITIAL_TENANTS[0], userRole: 'owner', isMember: true },
-    { ...INITIAL_TENANTS[1], userRole: 'member', isMember: true },
-  ]);
-
-  // Synchronous initial state is deterministic between server and client first frame
-  const [activeCommunity, setActiveCommunity] = useState<JoinedCommunity | null>(() => {
-    const candidateId = initialCommunityId || DEFAULT_TENANT_ID;
-    const found = INITIAL_TENANTS.find((t) => t.id === candidateId);
-    return found ? { ...found, userRole: 'owner', isMember: true } : DEFAULT_WORKSPACE_STATE;
-  });
-
+  const [joinedCommunities, setJoinedCommunities] = useState<JoinedCommunity[]>([]);
+  // Anonymous visitors DO NOT default to Acme. activeCommunity is null until resolved from verified session.
+  const [activeCommunity, setActiveCommunity] = useState<JoinedCommunity | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Sync cookies & API client tenantId with active community
-  const syncActiveCommunity = useCallback((comm: JoinedCommunity) => {
+  // Sync cookies & API client tenantId with verified active community
+  const syncActiveCommunity = useCallback((comm: JoinedCommunity | null) => {
     setActiveCommunity(comm);
+    if (!comm) {
+      api.setTenantId('');
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem('active_tenant_id');
+          localStorage.removeItem('active_community_id');
+          localStorage.removeItem('x-tenant-id');
+          localStorage.removeItem('syncly_workspace');
+        } catch {}
+        document.cookie = `active_tenant_id=; path=/; max-age=0; SameSite=Lax`;
+        document.cookie = `active_community_id=; path=/; max-age=0; SameSite=Lax`;
+        document.cookie = `x-tenant-id=; path=/; max-age=0; SameSite=Lax`;
+        document.cookie = `syncly_role=; path=/; max-age=0; SameSite=Lax`;
+        window.dispatchEvent(new Event('workspace-changed'));
+      }
+      return;
+    }
+
     api.setTenantId(comm.id);
     if (typeof window !== 'undefined') {
       try {
@@ -101,10 +101,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
         setAllCommunities(tenantsRes);
       }
 
-      if (membershipsRes && membershipsRes.length > 0) {
+      if (membershipsRes && Array.isArray(membershipsRes) && membershipsRes.length > 0) {
         const enrichedJoined: JoinedCommunity[] = membershipsRes.map((m: any) => ({
-          ...(m.community || tenantsRes.find((t: any) => t.id === m.communityId) || INITIAL_TENANTS[0]),
-          id: m.communityId,
+          ...(m.community || tenantsRes.find((t: any) => t.id === (m.community_id || m.communityId)) || INITIAL_TENANTS[0]),
+          id: m.community_id || m.communityId,
           userRole: m.role || 'member',
           isMember: true,
         }));
@@ -114,59 +114,28 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
         setActiveCommunity((prev) => {
           if (!prev) return enrichedJoined[0] || null;
           const match = enrichedJoined.find((c) => c.id === prev.id);
-          return match || enrichedJoined[0] || prev;
+          return match || enrichedJoined[0] || null;
         });
+      } else {
+        // Unauthenticated or user holds 0 memberships
+        setJoinedCommunities([]);
+        setActiveCommunity(null);
       }
-    } catch (e) {
-      console.warn('WorkspaceContext refreshMemberships fallback:', e);
+    } catch {
+      // Unauthenticated visitor
+      setJoinedCommunities([]);
+      setActiveCommunity(null);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Post-mount client effect: restore active workspace from localStorage/cookies without hydration mismatch
   useEffect(() => {
     setIsMounted(true);
-    try {
-      const storedWorkspace = localStorage.getItem('syncly_workspace');
-      const storedTenantId = localStorage.getItem('active_tenant_id') || localStorage.getItem('active_community_id') || localStorage.getItem('x-tenant-id');
-
-      if (storedWorkspace) {
-        const parsed = JSON.parse(storedWorkspace);
-        if (parsed?.id && parsed.id !== 'default') {
-          const match = INITIAL_TENANTS.find((t) => t.id === parsed.id);
-          setActiveCommunity({
-            ...(match || DEFAULT_WORKSPACE_STATE),
-            id: parsed.id,
-            name: parsed.name || match?.name || DEFAULT_WORKSPACE.name,
-            slug: parsed.slug || match?.slug || DEFAULT_WORKSPACE.slug,
-            userRole: parsed.role || 'owner',
-            isMember: true,
-          });
-          api.setTenantId(parsed.id);
-        }
-      } else if (storedTenantId && storedTenantId !== 'default') {
-        const found = INITIAL_TENANTS.find((t) => t.id === storedTenantId);
-        if (found) {
-          setActiveCommunity({ ...found, userRole: 'owner', isMember: true });
-          api.setTenantId(found.id);
-        } else {
-          setActiveCommunity(DEFAULT_WORKSPACE_STATE);
-          api.setTenantId(DEFAULT_WORKSPACE.id);
-        }
-      } else {
-        setActiveCommunity(DEFAULT_WORKSPACE_STATE);
-        api.setTenantId(DEFAULT_WORKSPACE.id);
-      }
-    } catch {
-      setActiveCommunity(DEFAULT_WORKSPACE_STATE);
-      api.setTenantId(DEFAULT_WORKSPACE.id);
-    }
     refreshMemberships();
   }, [refreshMemberships]);
 
   const switchCommunity = useCallback((communityId: string) => {
-    // Notify server to validate membership and issue verified session token
     fetch('/api/workspaces/switch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -234,14 +203,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
 export function useWorkspace() {
   const context = useContext(WorkspaceContext);
   if (!context) {
-    // Return safe fallback instead of throwing uncaught errors
     return {
-      joinedCommunities: [{ ...INITIAL_TENANTS[0], userRole: 'owner', isMember: true }],
+      joinedCommunities: [],
       allCommunities: INITIAL_TENANTS,
-      activeCommunity: DEFAULT_WORKSPACE_STATE,
+      activeCommunity: null,
       switchCommunity: () => {},
-      joinCommunity: async () => ({ status: 'success', message: 'OK' }),
-      batchJoin: async () => ({ success: true, joinedCount: 0, message: 'OK' }),
+      joinCommunity: async () => ({ status: 'error', message: 'No workspace context' }),
+      batchJoin: async () => ({ success: false, joinedCount: 0, message: 'No workspace context' }),
       refreshMemberships: async () => {},
       isLoading: false,
       isMounted: true,

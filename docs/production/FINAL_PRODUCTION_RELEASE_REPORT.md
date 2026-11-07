@@ -186,3 +186,4 @@ All code-level security controls, rate limiting, RLS policies, audit immutabilit
 1. User linking of GitHub `main` to Vercel Production project with environment secrets populated.
 2. Execution of Migration 016 in the production Supabase SQL Editor.
 3. Verification of live smoke tests on the production domain.
+

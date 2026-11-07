@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Channel, ChatMessage, Tenant, PresenceUser } from '../types.ts';
 import { api } from '../lib/api.ts';
+import { useAuth } from '@/lib/context/AuthContext.tsx';
 
 interface ChannelChatProps {
   channels: Channel[];
@@ -33,6 +34,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
   onChannelCreated,
   activeTenant,
 }) => {
+  const { session, profile } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputContent, setInputContent] = useState('');
   const [mediaAttachments, setMediaAttachments] = useState<string[]>([]);
@@ -138,14 +140,16 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
 
     // Optimistic message append
     const tempId = 'temp-' + Date.now();
+    const resolvedName = profile?.full_name || session?.user?.fullName || 'Team Member';
+    const resolvedInitials = resolvedName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'TM';
     const optimisticMsg: ChatMessage = {
       id: tempId,
       tenantId: activeTenant?.id || '',
       channelId: activeChannelId,
-      userId: 'current-user',
-      userName: activeTenant?.name === 'Acme Corporation' ? 'Elena Rostova' : 'Devon Thorne',
-      userRole: 'admin',
-      userInitials: activeTenant?.name === 'Acme Corporation' ? 'ER' : 'DT',
+      userId: profile?.id || session?.user?.id || 'current-user',
+      userName: resolvedName,
+      userRole: profile?.role || session?.user?.role || 'employee',
+      userInitials: resolvedInitials,
       content: contentToSend,
       mediaUrls: attachmentsToSend,
       createdAt: new Date().toISOString(),
