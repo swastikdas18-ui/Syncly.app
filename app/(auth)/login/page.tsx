@@ -8,53 +8,34 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleDemoLogin = (role: 'intern' | 'mentor') => {
+  const handleDemoLogin = async (role: 'intern' | 'mentor') => {
     try {
       setLoading(true);
       setErrorMsg(null);
 
-      const demoUser = {
-        id: role === 'intern' 
-          ? '00000000-0000-0000-0000-000000000002' 
-          : '00000000-0000-0000-0000-000000000001',
-        email: role === 'intern' ? 'intern@syncly.internal' : 'mentor@syncly.internal',
-        full_name: role === 'intern' ? 'Demo Intern' : 'Demo Mentor',
-        role: role,
-        tenant_id: '00000000-0000-0000-0000-000000000001',
-      };
-
-      const defaultWorkspace = {
-        id: '00000000-0000-0000-0000-000000000001',
-        name: 'Acme Corporation',
-        slug: 'acme-corp',
-        role: role === 'intern' ? 'intern' : 'admin',
-      };
-
-      const sessionPayload = JSON.stringify({
-        user: {
-          id: demoUser.id,
-          email: demoUser.email,
-          fullName: demoUser.full_name,
-          headline: 'Corporate Team Member',
-          role: demoUser.role,
-          tenantId: defaultWorkspace.id,
-          hasCompletedOnboarding: true,
-        },
-        token: 'demo-access-token',
-        expires_at: Date.now() + 86400000,
+      const res = await fetch('/api/auth/demo-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
       });
 
-      // 1. Set cookies with root path for Edge Middleware
-      document.cookie = `syncly_session=${encodeURIComponent(sessionPayload)}; path=/; max-age=86400; SameSite=Lax`;
-      document.cookie = `active_tenant_id=${defaultWorkspace.id}; path=/; max-age=86400; SameSite=Lax`;
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson?.error || 'Failed to authenticate demo persona.');
+      }
 
-      // 2. Mirror into LocalStorage for immediate CSR hydration
-      localStorage.setItem('syncly_user', JSON.stringify(demoUser));
-      localStorage.setItem('syncly_session', sessionPayload);
-      localStorage.setItem('active_tenant_id', defaultWorkspace.id);
-      localStorage.setItem('syncly_workspace', JSON.stringify(defaultWorkspace));
+      const data = await res.json();
 
-      // 3. Force hard navigation to trigger fresh server middleware validation
+      // Mirror user & workspace into LocalStorage for immediate CSR state hydration
+      if (data?.user) {
+        localStorage.setItem('syncly_user', JSON.stringify(data.user));
+        localStorage.setItem('active_tenant_id', data.user.tenantId);
+      }
+      if (data?.workspace) {
+        localStorage.setItem('syncly_workspace', JSON.stringify(data.workspace));
+      }
+
+      // Force hard navigation to trigger fresh server middleware validation
       window.location.href = '/feed';
     } catch (err: any) {
       setLoading(false);

@@ -1,14 +1,37 @@
 import { NextRequest } from 'next/server';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 
-export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  // SECURITY: Require cryptographically verified authentication before connecting
+  const auth = await getVerifiedAuthContext(req);
+
+  if (!auth.isAuthenticated || !auth.userId) {
+    return new Response(JSON.stringify({ error: 'Unauthorized. Cryptographically verified authentication required.' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const { searchParams } = new URL(req.url);
   const rawTenantId = searchParams.get('tenantId');
-  const tenantId = (rawTenantId && rawTenantId.trim() !== '' && rawTenantId !== 'undefined' && rawTenantId !== 'null')
-    ? rawTenantId.trim()
-    : '00000000-0000-0000-0000-000000000001';
+  const tenantId = rawTenantId?.trim();
+
+  if (!tenantId) {
+    return new Response(JSON.stringify({ error: 'Tenant context required.' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // SECURITY: Validate tenant context against verified session identity
+  if (auth.activeTenantId && auth.activeTenantId.toLowerCase() !== tenantId.toLowerCase()) {
+    return new Response(JSON.stringify({ error: 'Forbidden. Cross-tenant realtime stream access denied.' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   const encoder = new TextEncoder();
 

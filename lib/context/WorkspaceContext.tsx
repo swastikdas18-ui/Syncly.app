@@ -166,6 +166,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
   }, [refreshMemberships]);
 
   const switchCommunity = useCallback((communityId: string) => {
+    // Notify server to validate membership and issue verified session token
+    fetch('/api/workspaces/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tenantId: communityId }),
+    }).catch(() => {});
+
     const target = joinedCommunities.find((c) => c.id === communityId) 
       || allCommunities.find((c) => c.id === communityId);
 

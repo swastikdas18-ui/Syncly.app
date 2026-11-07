@@ -1,18 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantContext } from '@/lib/tenant/context.ts';
-import { DEFAULT_TENANT_ID } from '@/src/lib/tenantContext.ts';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 import { Channel } from '@/src/types.ts';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * GET /api/channels
+ * Returns workspace channels filtered strictly to the authenticated caller's active tenant.
+ */
 export async function GET(request: NextRequest) {
-  const { tenantId } = await getTenantContext();
-  const safeTenantId = tenantId || DEFAULT_TENANT_ID;
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Valid Supabase session and active workspace membership required.' },
+      { status: 401 }
+    );
+  }
+
+  const tenantId = auth.activeTenantId;
 
   const defaultChannels: Channel[] = [
     {
       id: 'general',
-      tenantId: safeTenantId,
+      tenantId,
       name: 'general',
       description: 'Company-wide updates & general watercooler',
       isPrivate: false,
@@ -20,7 +30,7 @@ export async function GET(request: NextRequest) {
     },
     {
       id: 'announcements',
-      tenantId: safeTenantId,
+      tenantId,
       name: 'announcements',
       description: 'Executive broadcasts and corporate notices',
       isPrivate: false,
@@ -28,7 +38,7 @@ export async function GET(request: NextRequest) {
     },
     {
       id: 'engineering',
-      tenantId: safeTenantId,
+      tenantId,
       name: 'engineering',
       description: 'Sprint planning and technical RFCs',
       isPrivate: false,
@@ -38,8 +48,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
+    tenantId,
     count: defaultChannels.length,
     data: defaultChannels,
   });
 }
-

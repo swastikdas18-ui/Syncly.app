@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { createClient } from '@/lib/supabase/server.ts';
 
 export async function POST(request: NextRequest) {
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Valid Supabase session required.' },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await request.json();
-    const { tenantId, fullName, headline, role, avatarUrl, selectedChannels, notifications } = body;
-
-    // Strict UUID validation to prevent Postgres 22P02 invalid input syntax errors
-    const safeTenantId = (tenantId && UUID_REGEX.test(tenantId)) ? tenantId : DEFAULT_TENANT_ID;
+    const { fullName, headline, avatarUrl, selectedChannels, notifications } = body;
 
     if (!fullName || typeof fullName !== 'string' || fullName.trim().length === 0) {
       return NextResponse.json(
@@ -18,7 +22,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const assignedRole = role === 'intern' ? 'intern' : 'employee';
+    const assignedRole = auth.role || 'employee';
     const initials = fullName
       .trim()
       .split(/\s+/)
@@ -27,9 +31,19 @@ export async function POST(request: NextRequest) {
       .substring(0, 2)
       .toUpperCase() || 'U';
 
-    const newProfile = {
-      id: crypto.randomUUID(),
-      tenantId: safeTenantId,
+    const supabase = await createClient(request);
+
+    // Update profile in PostgreSQL public.profiles
+    await (supabase.from('profiles') as any)
+      .update({
+        full_name: fullName.trim(),
+        avatar_url: avatarUrl || auth.profile?.avatar_url,
+      })
+      .eq('id', auth.userId);
+
+    const updatedProfile = {
+      id: auth.userId,
+      tenantId: auth.activeTenantId,
       fullName: fullName.trim(),
       headline: headline?.trim() || (assignedRole === 'intern' ? 'Software Engineering Intern' : 'Product Team Member'),
       avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(fullName.trim())}`,
@@ -42,22 +56,13 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date().toISOString()
     };
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
-      profile: newProfile,
+      profile: updatedProfile,
       has_completed_onboarding: true,
       message: 'Onboarding completed successfully'
     });
-
-    // Set cookie for session & tenant persistence
-    response.cookies.set('x-tenant-id', safeTenantId, { path: '/', httpOnly: false });
-    response.cookies.set('syncly_onboarded', 'true', { path: '/', maxAge: 60 * 60 * 24 * 30 });
-
-    return response;
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to process onboarding submission', details: String(error) },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: 'Server error processing onboarding payload' }, { status: 500 });
   }
 }

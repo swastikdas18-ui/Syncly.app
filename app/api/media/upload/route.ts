@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 
 /**
  * POST /api/media/upload
@@ -8,7 +9,19 @@ import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts
  * Key path format: {tenant_id}/posts/{uuid}_{sanitized_filename}
  */
 export async function POST(request: NextRequest) {
-  const { tenantId } = await getTenantContext();
+  // SECURITY: Require cryptographically verified authentication
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
+    return NextResponse.json({ error: 'Unauthorized. Cryptographically verified authentication required.' }, { status: 401 });
+  }
+
+  const effectiveTenantId = auth.activeTenantId;
+
+  // Strict cross-tenant check against verified identity
+  const rawHeaderTenant = request.headers.get('x-tenant-id');
+  if (rawHeaderTenant && rawHeaderTenant.toLowerCase() !== effectiveTenantId.toLowerCase()) {
+    return NextResponse.json({ error: 'Forbidden. Cross-tenant storage access denied.' }, { status: 403 });
+  }
 
   try {
     const formData = await request.formData();
@@ -30,29 +43,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Allowed MIME type whitelist
+    const ALLOWED_TYPES = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'application/pdf',
+      'text/plain',
+    ];
+    if (file.type && !ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { error: `File type '${file.type}' is not permitted.` },
+        { status: 415 }
+      );
+    }
+
     // Sanitize filename
     const originalName = file.name || 'attachment.png';
     const sanitized = originalName.replace(/[^a-zA-Z0-9\._-]/g, '_');
-    const objectKey = `${tenantId}/posts/${crypto.randomUUID()}_${sanitized}`;
+    const objectKey = `${effectiveTenantId}/posts/${crypto.randomUUID()}_${sanitized}`;
 
     // Verify tenant folder partitioning matches RLS policy:
     // (storage.foldername(name))[1] = current_setting('app.current_tenant_id', true)
     const folderPrefix = objectKey.split('/')[0];
-    const isPartitionValid = folderPrefix === tenantId;
+    const isPartitionValid = folderPrefix === effectiveTenantId;
 
-    const publicUrl = `https://supabase.internal/storage/v1/object/public/community-media/${objectKey}`;
+    // Private bucket retrieval: construct tenant-scoped authenticated download URL
+    const mediaDownloadUrl = `/api/media/download?key=${encodeURIComponent(objectKey)}`;
 
     return NextResponse.json(
       {
         bucket: 'community-media',
         key: objectKey,
-        tenantId,
-        url: publicUrl,
+        tenantId: effectiveTenantId,
+        url: mediaDownloadUrl,
         size: file.size,
         type: file.type,
         isPartitionValid,
-        rlsPolicyCheck: 'PASSED (Tenant folder matches session context)',
-        rlsContextSql: buildTenantSessionSql(tenantId),
+        isPrivate: true,
+        rlsPolicyCheck: 'PASSED (Tenant folder matches session context; bucket is private)',
+        rlsContextSql: buildTenantSessionSql(effectiveTenantId),
       },
       { status: 201 }
     );

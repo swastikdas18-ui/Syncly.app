@@ -1,21 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { buildTenantSessionSql } from '@/lib/tenant/context.ts';
 import { INITIAL_TENANTS } from '@/src/lib/tenantContext.ts';
 import { Tenant } from '@/src/types.ts';
+import { checkRateLimit } from '@/lib/rate-limit.ts';
 
+export const dynamic = 'force-dynamic';
+
+/**
+ * GET /api/communities/search
+ * Searches communities filtered by verified user identity and memberships.
+ */
 export async function GET(request: NextRequest) {
-  const { tenantId } = await getTenantContext();
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Valid Supabase session required.' },
+      { status: 401 }
+    );
+  }
+
+  // Rate limiting for community search
+  const rl = await checkRateLimit('search', auth.userId);
+  if (!rl.isAllowed) {
+    return NextResponse.json(
+      { error: 'Search rate limit exceeded. Please wait a moment.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(rl.resetSeconds),
+          'X-RateLimit-Limit': String(rl.limit),
+          'X-RateLimit-Remaining': String(rl.remaining),
+        },
+      }
+    );
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const q = (searchParams.get('q') || '').toLowerCase().trim();
   const filter = (searchParams.get('filter') || 'all').toLowerCase().trim();
-  const callerEmail = (request.headers.get('x-user-email') || 'sarah.chen@acmecorp.internal').toLowerCase().trim();
-  const callerDomain = callerEmail.includes('@') ? callerEmail.split('@')[1] : 'acmecorp.internal';
 
-  // Demo joined communities for Sarah Chen
-  const joinedIds = [INITIAL_TENANTS[0].id, INITIAL_TENANTS[1].id];
+  // Authoritative email derived from session
+  const callerEmail = (auth.email || '').toLowerCase().trim();
+  const callerDomain = callerEmail.includes('@') ? callerEmail.split('@')[1] : '';
+
+  const userMembershipMap = new Map<string, string>();
+  auth.memberships.forEach((m) => userMembershipMap.set(m.community_id, m.role));
+  if (auth.profile?.tenant_id) {
+    userMembershipMap.set(auth.profile.tenant_id, auth.profile.role);
+  }
 
   const matching = (INITIAL_TENANTS as Tenant[]).filter((t: Tenant) => {
-    const isMember = joinedIds.includes(t.id);
+    const isMember = userMembershipMap.has(t.id);
     if (t.isDiscoverable === false && !isMember) {
       return false;
     }
@@ -31,10 +67,10 @@ export async function GET(request: NextRequest) {
 
   const enriched = matching.map((t: Tenant) => {
     const allowed = (t.allowedDomains || []).map((d: string) => d.toLowerCase());
-    const matchesUserDomain = allowed.includes(callerDomain) || allowed.includes(callerEmail);
-    const isCurrentWorkspace = t.id === tenantId;
-    const isMember = joinedIds.includes(t.id);
-    const userRole = t.id === INITIAL_TENANTS[0].id ? 'owner' : t.id === INITIAL_TENANTS[1].id ? 'moderator' : undefined;
+    const matchesUserDomain = callerDomain ? allowed.includes(callerDomain) : false;
+    const isCurrentWorkspace = t.id === auth.activeTenantId;
+    const isMember = userMembershipMap.has(t.id);
+    const userRole = userMembershipMap.get(t.id);
 
     return {
       ...t,
@@ -59,18 +95,15 @@ export async function GET(request: NextRequest) {
   } else if (filter === 'consulting') {
     filtered = enriched.filter((c) => {
       const ind = (c.industry || '').toLowerCase();
-      return ind.includes('consult') || ind.includes('advis');
+      return ind.includes('consult') || ind.includes('advisory') || ind.includes('strategy');
     });
-  } else if (filter === 'public') {
-    filtered = enriched.filter((c) => c.isDiscoverable !== false && !c.requiresApproval);
   }
 
   return NextResponse.json({
     success: true,
-    callerEmail,
-    callerDomain,
     count: filtered.length,
+    callerDomain,
     data: filtered,
-    rlsContextSql: buildTenantSessionSql(tenantId),
+    rlsContextSql: buildTenantSessionSql(auth.activeTenantId),
   });
 }

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { checkRateLimit } from '@/lib/rate-limit.ts';
 
 interface CreatePostPayload {
   title?: string;
@@ -67,11 +69,12 @@ let inMemoryPosts: any[] = SEED_POSTS.map((sp, idx) => ({
  * Returns seeded posts for Acme Corporation when database rows are empty.
  */
 export async function GET(request: NextRequest) {
-  const { tenantId, isValid } = await getTenantContext();
-
-  if (!isValid || !tenantId) {
-    return NextResponse.json({ error: 'Tenant context required.' }, { status: 401 });
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
+    return NextResponse.json({ error: 'Unauthorized. Valid Supabase session required.' }, { status: 401 });
   }
+
+  const tenantId = auth.activeTenantId;
 
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get('category') || 'all';
@@ -102,13 +105,49 @@ export async function GET(request: NextRequest) {
  * Creates a new company update post tagged with authenticated author and isolated tenant_id.
  */
 export async function POST(request: NextRequest) {
-  const { tenantId, isValid } = await getTenantContext();
-
-  if (!isValid || !tenantId) {
-    return NextResponse.json({ error: 'Tenant context required.' }, { status: 401 });
+  // Enforce cryptographically verified authentication
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Cryptographically verified authentication required.' },
+      { status: 401 }
+    );
   }
 
-  const callerId = request.headers.get('x-user-id');
+  const effectiveTenantId = auth.activeTenantId;
+
+  // Strict cross-tenant check against verified identity
+  const rawHeaderTenant = request.headers.get('x-tenant-id');
+  if (rawHeaderTenant && rawHeaderTenant.toLowerCase() !== effectiveTenantId.toLowerCase()) {
+    return NextResponse.json({ error: 'Forbidden. Cross-tenant post creation denied.' }, { status: 403 });
+  }
+
+  // Enforce server-derived RBAC: Interns are prohibited from publishing posts
+  if (auth.role === 'intern') {
+    return NextResponse.json({ error: 'Forbidden. Interns are not permitted to publish posts.' }, { status: 403 });
+  }
+
+  // Rate limiting check
+  const rl = await checkRateLimit('post_create', auth.userId);
+  if (!rl.isAllowed) {
+    if (rl.isServiceUnavailable) {
+      return NextResponse.json(
+        { error: 'Rate limiting service temporarily unavailable. Please retry shortly.' },
+        { status: 503, headers: { 'Retry-After': '30' } }
+      );
+    }
+    return NextResponse.json(
+      { error: 'Too many posts created. Please slow down.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(rl.resetSeconds),
+          'X-RateLimit-Limit': String(rl.limit),
+          'X-RateLimit-Remaining': String(rl.remaining),
+        },
+      }
+    );
+  }
 
   try {
     const body = (await request.json()) as CreatePostPayload;
@@ -120,21 +159,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const resolvedAuthorId = body.authorId || callerId;
-    if (!resolvedAuthorId) {
-      return NextResponse.json(
-        { error: 'Authenticated user identity (authorId) is required to publish.' },
-        { status: 401 }
-      );
-    }
-
     const newPost = {
       id: crypto.randomUUID(),
-      tenantId,
-      authorId: resolvedAuthorId,
-      authorName: body.authorName || 'Team Member',
-      authorRole: body.authorRole || 'employee',
-      authorInitials: (body.authorName || 'TM').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase(),
+      tenantId: effectiveTenantId,
+      authorId: auth.userId,
+      authorName: auth.fullName || 'Team Member',
+      authorRole: auth.role || 'employee',
+      authorInitials: (auth.fullName || 'TM').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase(),
       title: body.title?.trim() || '',
       content: body.content.trim(),
       category: body.category || 'general',
@@ -142,7 +173,7 @@ export async function POST(request: NextRequest) {
       likesCount: 0,
       commentsCount: 0,
       createdAt: new Date().toISOString(),
-      rlsContextSql: buildTenantSessionSql(tenantId),
+      rlsContextSql: buildTenantSessionSql(effectiveTenantId),
     };
 
     inMemoryPosts.unshift(newPost);

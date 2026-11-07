@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { buildTenantSessionSql } from '@/lib/tenant/context.ts';
 
 export async function GET(request: NextRequest) {
-  const { tenantId, isValid } = await getTenantContext();
-
-  if (!isValid || !tenantId) {
-    return NextResponse.json({ error: 'Tenant context required.' }, { status: 401 });
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Valid Supabase session required.' },
+      { status: 401 }
+    );
   }
 
-  // Returns clean empty array when no events are scheduled for the tenant
+  const tenantId = auth.activeTenantId;
+
   return NextResponse.json({
     success: true,
     tenantId,
@@ -19,11 +23,15 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { tenantId, isValid } = await getTenantContext();
-
-  if (!isValid || !tenantId) {
-    return NextResponse.json({ error: 'Tenant context required.' }, { status: 401 });
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Valid Supabase session required.' },
+      { status: 401 }
+    );
   }
+
+  const tenantId = auth.activeTenantId;
 
   try {
     const body = await request.json();
@@ -36,6 +44,7 @@ export async function POST(request: NextRequest) {
     const newEvent = {
       id: crypto.randomUUID(),
       tenantId,
+      organizerId: auth.userId,
       title: title.trim(),
       description: (description || '').trim(),
       date: date.trim(),
