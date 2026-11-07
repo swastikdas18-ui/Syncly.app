@@ -142,7 +142,7 @@ BEGIN
       NULLIF(current_setting('request.jwt.claim.role', true), ''),
       (auth.jwt() ->> 'role'),
       NULLIF(current_setting('role', true), ''),
-      session_user::text
+      'authenticated'
     );
   EXCEPTION WHEN OTHERS THEN
     v_req_role := 'authenticated';
