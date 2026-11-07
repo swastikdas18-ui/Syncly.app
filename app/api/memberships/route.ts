@@ -1,35 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 import { INITIAL_TENANTS } from '@/src/lib/tenantContext.ts';
 
-export async function GET(request: NextRequest) {
-  const callerEmail = (request.headers.get('x-user-email') || 'sarah.chen@acmecorp.internal').toLowerCase().trim();
+export const dynamic = 'force-dynamic';
 
-  // Return memberships (default initial memberships for demonstration)
-  const defaultMemberships = [
-    {
-      id: 'mem-sarah-acme',
-      userId: '00000000-0000-0000-0000-000000000010',
-      userEmail: callerEmail,
-      communityId: INITIAL_TENANTS[0].id,
-      role: 'owner',
-      joinedAt: '2026-01-15T09:00:00.000Z',
-      community: INITIAL_TENANTS[0],
-    },
-    {
-      id: 'mem-sarah-globex',
-      userId: '00000000-0000-0000-0000-000000000010',
-      userEmail: callerEmail,
-      communityId: INITIAL_TENANTS[1].id,
-      role: 'moderator',
-      joinedAt: '2026-02-10T14:30:00.000Z',
-      community: INITIAL_TENANTS[1],
-    },
-  ];
+export async function GET(request: NextRequest) {
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Valid Supabase session required.' },
+      { status: 401 }
+    );
+  }
+
+  // Return memberships resolved from database context
+  const userMemberships = auth.memberships.map((m) => {
+    const tenantInfo = INITIAL_TENANTS.find((t) => t.id === m.community_id) || {
+      id: m.community_id,
+      name: 'Workspace',
+      slug: 'workspace',
+    };
+    return {
+      id: m.id,
+      userId: auth.userId,
+      userEmail: auth.email,
+      communityId: m.community_id,
+      role: m.role,
+      joinedAt: m.joined_at,
+      community: tenantInfo,
+    };
+  });
 
   return NextResponse.json({
     success: true,
-    callerEmail,
-    count: defaultMemberships.length,
-    data: defaultMemberships,
+    userEmail: auth.email,
+    count: userMemberships.length,
+    data: userMemberships,
   });
 }

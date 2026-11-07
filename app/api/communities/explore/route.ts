@@ -1,14 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { buildTenantSessionSql } from '@/lib/tenant/context.ts';
 import { INITIAL_TENANTS } from '@/src/lib/tenantContext.ts';
 import { Tenant } from '@/src/types.ts';
 
+export const dynamic = 'force-dynamic';
+
+/**
+ * GET /api/communities/explore
+ * Returns discoverable communities. Matches user domain strictly against verified session email.
+ */
 export async function GET(request: NextRequest) {
-  const { tenantId } = await getTenantContext();
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Valid Supabase session required.' },
+      { status: 401 }
+    );
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const q = (searchParams.get('q') || '').toLowerCase().trim();
-  const callerEmail = (request.headers.get('x-user-email') || 'sarah.chen@acmecorp.internal').toLowerCase().trim();
-  const callerDomain = callerEmail.includes('@') ? callerEmail.split('@')[1] : 'acmecorp.internal';
+
+  // Authoritative email derived exclusively from verified session
+  const callerEmail = (auth.email || '').toLowerCase().trim();
+  const callerDomain = callerEmail.includes('@') ? callerEmail.split('@')[1] : '';
 
   const matching = (INITIAL_TENANTS as Tenant[]).filter((t: Tenant) => {
     if (!q) return t.isDiscoverable !== false;
@@ -23,13 +39,15 @@ export async function GET(request: NextRequest) {
 
   const enriched = matching.map((t: Tenant) => {
     const allowed = (t.allowedDomains || []).map((d: string) => d.toLowerCase());
-    const matchesUserDomain = allowed.includes(callerDomain) || allowed.includes(callerEmail);
-    const isCurrentWorkspace = t.id === tenantId;
+    const matchesUserDomain = callerDomain ? allowed.includes(callerDomain) : false;
+    const isCurrentWorkspace = t.id === auth.activeTenantId;
+    const isMember = auth.memberships.some((m) => m.community_id === t.id) || auth.profile?.tenant_id === t.id;
 
     return {
       ...t,
       matchesUserDomain,
       isCurrentWorkspace,
+      isMember,
       hasPendingRequest: false,
     };
   });
@@ -39,6 +57,6 @@ export async function GET(request: NextRequest) {
     count: enriched.length,
     callerDomain,
     data: enriched,
-    rlsContextSql: buildTenantSessionSql(tenantId),
+    rlsContextSql: buildTenantSessionSql(auth.activeTenantId),
   });
 }

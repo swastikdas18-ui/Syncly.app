@@ -3,14 +3,17 @@ import { headers } from 'next/headers';
 /**
  * Syncly / Work-Connect Multi-Tenant System Context
  * 
- * Safe Fallback Constants:
- * NEVER use string literals like 'tenant-default' or 'default' because Postgres will
- * fail with a 22P02 "invalid input syntax for type uuid" error when casting to UUID.
+ * FAIL-CLOSED SECURITY RULES:
+ * 1. Missing or invalid tenant context must fail closed (isValid: false, tenantId: null).
+ * 2. Never silently authorizes Acme Corporation as the default tenant.
+ * 3. Active tenant selection is merely a preference; actual authorization is enforced
+ *    by verifying database memberships against the authenticated user.
  */
+
 export const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 export const SECONDARY_TENANT_ID = '00000000-0000-0000-0000-000000000002';
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * Validates whether a given string is a syntactically valid RFC 4122 UUID.
@@ -22,30 +25,29 @@ export function isValidUUID(uuid: string | null | undefined): boolean {
 
 /**
  * Safely resolves a tenant ID with strict UUID validation.
- * Falls back to DEFAULT_TENANT_ID ('00000000-0000-0000-0000-000000000001')
- * if the candidate is missing, invalid, or malformed.
+ * Fails closed by returning null if missing, invalid, or malformed.
  */
-export function resolveTenantId(candidate: string | null | undefined): string {
+export function resolveTenantId(candidate: string | null | undefined): string | null {
   if (!candidate) {
-    return DEFAULT_TENANT_ID;
+    return null;
   }
   const trimmed = candidate.trim();
   if (isValidUUID(trimmed)) {
     return trimmed.toLowerCase();
   }
-  // Defensive fallback against 22P02 Postgres errors
-  return DEFAULT_TENANT_ID;
+  return null;
 }
 
 export interface TenantContext {
-  tenantId: string;
-  source: 'header' | 'cookie' | 'fallback';
+  tenantId: string | null;
+  source: 'header' | 'none';
   isValid: boolean;
 }
 
 /**
  * Server-side helper for Next.js App Router (Server Components & Route Handlers).
  * Reads the 'x-tenant-id' injected by Next.js middleware into request headers.
+ * Fails closed if missing or invalid.
  */
 export async function getTenantContext(): Promise<TenantContext> {
   try {
@@ -60,13 +62,13 @@ export async function getTenantContext(): Promise<TenantContext> {
       };
     }
   } catch {
-    // Graceful handling outside request context
+    // Handling outside request context
   }
 
   return {
-    tenantId: DEFAULT_TENANT_ID,
-    source: 'fallback',
-    isValid: true,
+    tenantId: null,
+    source: 'none',
+    isValid: false,
   };
 }
 
@@ -75,7 +77,22 @@ export async function getTenantContext(): Promise<TenantContext> {
  * Sets the session variable used by RLS policies:
  * SET LOCAL app.current_tenant_id = '...'
  */
-export function buildTenantSessionSql(tenantId: string): string {
+export function buildTenantSessionSql(tenantId: string | null | undefined): string {
   const safeId = resolveTenantId(tenantId);
+  if (!safeId) {
+    return "SET LOCAL app.current_tenant_id = '';";
+  }
   return `SET LOCAL app.current_tenant_id = '${safeId}';`;
+}
+
+/**
+ * Validates whether a user identity has authorization to perform actions in target tenant.
+ * Protects mutation endpoints from cross-tenant spoofing.
+ */
+export function verifyTenantAuthorization(userTenantId: string | null | undefined, targetTenantId: string | null | undefined): boolean {
+  if (!userTenantId || !targetTenantId) return false;
+  const safeUserTenant = resolveTenantId(userTenantId);
+  const safeTargetTenant = resolveTenantId(targetTenantId);
+  if (!safeUserTenant || !safeTargetTenant) return false;
+  return safeUserTenant === safeTargetTenant;
 }

@@ -1,0 +1,102 @@
+[
+  {
+    "num": 1,
+    "id": "REG-01",
+    "name": "User registration without tenant information leaves user unassigned",
+    "type": "STATIC_SOURCE_ASSERTION",
+    "expected": "No default Acme fallback; status defaults to pending_onboarding",
+    "actual": "Acme fallback eradicated; pending_onboarding assigned",
+    "status": "PASS",
+    "details": "Trigger handle_new_user() leaves users without verified tenant context in pending_onboarding state"
+  },
+  {
+    "num": 2,
+    "id": "REG-02",
+    "name": "Forged user_metadata.tenant_id is ignored",
+    "type": "STATIC_SOURCE_ASSERTION",
+    "expected": "raw_user_meta_data->>'tenant_id' ignored; raw_app_meta_data used",
+    "actual": "Client user_metadata ignored; app_metadata enforced",
+    "status": "PASS",
+    "details": "Trigger only evaluates server-signed raw_app_meta_data for initial tenant assignment"
+  },
+  {
+    "num": 3,
+    "id": "REG-03",
+    "name": "Invitation-based tenant assignment creates verified membership",
+    "type": "STATIC_SOURCE_ASSERTION",
+    "expected": "Valid tenant enrollment automatically creates public.memberships record",
+    "actual": "Enrolled tenant writes to public.memberships",
+    "status": "PASS",
+    "details": "Verified server-set tenant writes to both profiles and memberships join table"
+  },
+  {
+    "num": 4,
+    "id": "REG-04",
+    "name": "Suspended account rejected by is_tenant_member()",
+    "type": "STATIC_SOURCE_ASSERTION",
+    "expected": "is_tenant_member() requires status = 'active' on public.profiles",
+    "actual": "Enforces status = 'active' on profile check",
+    "status": "PASS",
+    "details": "PostgreSQL RLS function verifies user profile status is active before evaluating access"
+  },
+  {
+    "num": 5,
+    "id": "REG-05",
+    "name": "Disabled/Suspended accounts rejected at API perimeter",
+    "type": "UNIT_INTEGRATION_TEST",
+    "expected": "getVerifiedAuthContext() returns unauthorizedResult if profile.status != active",
+    "actual": "Rejects deactivated user with 401/Forbidden context",
+    "status": "PASS",
+    "details": "Server auth authority rejects inactive/suspended profiles before route execution"
+  },
+  {
+    "num": 6,
+    "id": "REG-06",
+    "name": "Revoking membership removes RLS authorization immediately",
+    "type": "STATIC_SOURCE_ASSERTION",
+    "expected": "is_tenant_member() requires row in public.memberships; profiles.tenant_id cannot bypass",
+    "actual": "Requires row in public.memberships",
+    "status": "PASS",
+    "details": "Membership row deletion immediately terminates database authorization"
+  },
+  {
+    "num": 7,
+    "id": "REG-07",
+    "name": "Stale profile tenant_id cannot restore revoked access",
+    "type": "UNIT_INTEGRATION_TEST",
+    "expected": "No fallback to profile.tenant_id when membership is missing in memberships table",
+    "actual": "Strictly checks memberships list in both auth and switch routes",
+    "status": "PASS",
+    "details": "Server context and workspace switch verify explicit memberships only"
+  },
+  {
+    "num": 8,
+    "id": "REG-08",
+    "name": "Cross-tenant media download rejected with HTTP 403",
+    "type": "UNIT_INTEGRATION_TEST",
+    "expected": "GET /api/media/download rejects users without membership in the target tenant prefix",
+    "actual": "Validates caller membership against key prefix before signing",
+    "status": "PASS",
+    "details": "Authenticated download route enforces tenant membership on file key prefix"
+  },
+  {
+    "num": 9,
+    "id": "REG-09",
+    "name": "Unauthenticated media download rejected with HTTP 401",
+    "type": "UNIT_INTEGRATION_TEST",
+    "expected": "GET /api/media/download rejects unauthenticated requests",
+    "actual": "Rejects with HTTP 401 Unauthorized",
+    "status": "PASS",
+    "details": "Media download requires cryptographically verified Supabase session"
+  },
+  {
+    "num": 10,
+    "id": "REG-10",
+    "name": "Private bucket configured in migration 012 and bootstrap plan",
+    "type": "STATIC_SOURCE_ASSERTION",
+    "expected": "community-media bucket configured with public = false; public read policies removed",
+    "actual": "public = false enforced in migration 012 and bootstrap specification",
+    "status": "PASS",
+    "details": "Bootstrap scripts mandate private bucket configuration for community-media"
+  }
+]

@@ -1,27 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantContext, resolveTenantId } from '@/lib/tenant/context.ts';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 
 export async function POST(req: NextRequest) {
+  const auth = await getVerifiedAuthContext(req);
+  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Valid Supabase session required.' },
+      { status: 401 }
+    );
+  }
+
   try {
-    const { tenantId: ctxTenantId } = await getTenantContext();
-    const rawHeaderTenant = req.headers.get('x-tenant-id');
-    const tenantId = resolveTenantId(rawHeaderTenant || ctxTenantId);
-
     const body = await req.json().catch(() => ({}));
-    const { userId, status = 'online', channelId } = body;
-
-    if (!userId && !channelId) {
-      return NextResponse.json(
-        { ok: true, status: 'skipped (no user or channel)', tenantId },
-        { status: 200 }
-      );
-    }
+    const { status = 'online', channelId } = body;
 
     return NextResponse.json(
       {
         ok: true,
-        tenantId,
-        userId: userId || null,
+        tenantId: auth.activeTenantId,
+        userId: auth.userId,
         status,
         channelId: channelId || null,
         timestamp: new Date().toISOString(),
@@ -29,12 +26,14 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: any) {
-    console.warn('[Presence Track] Heartbeat handled with fallback:', err?.message);
-    return NextResponse.json({ ok: true, fallback: true }, { status: 200 });
+    return NextResponse.json({ error: 'Malformed presence track payload.' }, { status: 400 });
   }
 }
 
-export async function GET() {
-  return NextResponse.json({ status: 'online' }, { status: 200 });
+export async function GET(req: NextRequest) {
+  const auth = await getVerifiedAuthContext(req);
+  if (!auth.isAuthenticated) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return NextResponse.json({ status: 'online', tenantId: auth.activeTenantId }, { status: 200 });
 }
-

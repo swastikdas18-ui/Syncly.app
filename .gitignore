@@ -8,3 +8,6 @@ coverage/
 !.env.example
 .next/
 *.tsbuildinfo
+
+# Security staging export
+**/staging_logical_export.json

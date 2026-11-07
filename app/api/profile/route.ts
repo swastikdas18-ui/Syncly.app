@@ -1,42 +1,87 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { buildTenantSessionSql } from '@/lib/tenant/context.ts';
+import { createClient } from '@/lib/supabase/server.ts';
 
+/**
+ * GET /api/profile
+ * Returns the authenticated user's profile and active workspace context.
+ */
 export async function GET(request: NextRequest) {
-  const { tenantId } = await getTenantContext();
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Valid Supabase session required.' },
+      { status: 401 }
+    );
+  }
+
   return NextResponse.json({
     success: true,
-    tenantId,
-    message: 'Profile details endpoint scoped to tenant',
-    rlsContextSql: buildTenantSessionSql(tenantId),
+    user: {
+      id: auth.userId,
+      email: auth.email,
+      fullName: auth.fullName,
+      role: auth.role,
+      tenantId: auth.activeTenantId,
+    },
+    profile: auth.profile,
+    memberships: auth.memberships,
+    rlsContextSql: buildTenantSessionSql(auth.activeTenantId),
   });
 }
 
+/**
+ * PATCH /api/profile
+ * Updates self-service profile fields.
+ * 
+ * SECURITY: Prevents self-escalation of roles. Role changes can only be made
+ * by organization owners and administrators through dedicated admin endpoints.
+ */
 export async function PATCH(request: NextRequest) {
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth.isAuthenticated || !auth.userId) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Valid Supabase session required.' },
+      { status: 401 }
+    );
+  }
+
   try {
-    const { tenantId } = await getTenantContext();
     const body = await request.json().catch(() => ({}));
-    const { fullName, headline, avatarUrl, role, email } = body;
+    const { fullName, avatarUrl } = body;
 
-    const response = NextResponse.json({
-      success: true,
-      data: {
-        fullName: fullName || 'Sarah Chen',
-        headline: headline || 'Enterprise Team Member',
-        avatarUrl,
-        role: role || 'admin',
-        email: email || 'sarah.chen@acmecorp.internal',
-        tenantId,
-      },
-      message: 'Profile updated successfully',
-      rlsContextSql: buildTenantSessionSql(tenantId),
-    });
+    const supabase = await createClient(request);
 
-    if (role) {
-      response.cookies.set('syncly_role', role, { path: '/', maxAge: 2592000 });
+    // Update public.profiles in database for the authenticated user only
+    const updatePayload: { full_name?: string; avatar_url?: string } = {};
+    if (typeof fullName === 'string' && fullName.trim()) {
+      updatePayload.full_name = fullName.trim();
+    }
+    if (typeof avatarUrl === 'string') {
+      updatePayload.avatar_url = avatarUrl.trim();
     }
 
-    return response;
+    if (Object.keys(updatePayload).length > 0) {
+      await (supabase.from('profiles') as any)
+        .update(updatePayload)
+        .eq('id', auth.userId);
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: auth.userId,
+        email: auth.email,
+        fullName: updatePayload.full_name || auth.fullName,
+        avatarUrl: updatePayload.avatar_url || auth.profile?.avatar_url,
+        role: auth.role, // Preserves authoritative role from DB; client role input is discarded
+        tenantId: auth.activeTenantId,
+      },
+      message: 'Profile updated successfully. Role modifications are restricted to workspace administrators.',
+      rlsContextSql: buildTenantSessionSql(auth.activeTenantId),
+    });
   } catch {
-    return NextResponse.json({ error: 'Malformed payload' }, { status: 400 });
+    return NextResponse.json({ error: 'Malformed payload.' }, { status: 400 });
   }
 }

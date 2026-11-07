@@ -63,6 +63,8 @@ export const JoinRequestsModal: React.FC<JoinRequestsModalProps> = ({
         )
       );
       onRequestReviewed?.();
+    } else {
+      alert(res.message || 'Failed to process request');
     }
   };
 

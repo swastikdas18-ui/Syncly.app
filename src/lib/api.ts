@@ -212,7 +212,10 @@ class SynclyApiClient {
         body: JSON.stringify({ action }),
       });
       const json = await res.json();
-      return json;
+      if (!res.ok) {
+        return { success: false, message: json.error || json.message || 'Review failed' };
+      }
+      return { success: true, message: json.message || 'Review completed' };
     } catch (e: any) {
       console.error('API reviewCommunityRequest error:', e);
       return { success: false, message: e.message || 'Review failed' };

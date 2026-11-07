@@ -9,24 +9,87 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      community_join_requests: {
+        Row: {
+          id: string;
+          community_id: string;
+          user_id: string;
+          user_email: string;
+          user_name: string;
+          message: string;
+          status: 'pending' | 'approved' | 'rejected';
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          community_id: string;
+          user_id: string;
+          user_email: string;
+          user_name?: string;
+          message?: string;
+          status?: 'pending' | 'approved' | 'rejected';
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          community_id?: string;
+          user_id?: string;
+          user_email?: string;
+          user_name?: string;
+          message?: string;
+          status?: 'pending' | 'approved' | 'rejected';
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       tenants: {
         Row: {
           id: string;
           name: string;
           slug: string;
           created_at: string;
+          tagline?: string | null;
+          description?: string | null;
+          logo_url?: string | null;
+          industry?: string | null;
+          requires_approval?: boolean;
+          allowed_domains?: string[];
+          is_discoverable?: boolean;
+          search_vector?: string | null;
         };
         Insert: {
           id?: string;
           name: string;
           slug: string;
           created_at?: string;
+          tagline?: string | null;
+          description?: string | null;
+          logo_url?: string | null;
+          industry?: string | null;
+          requires_approval?: boolean;
+          allowed_domains?: string[];
+          is_discoverable?: boolean;
+          search_vector?: string | null;
         };
         Update: {
           id?: string;
           name?: string;
           slug?: string;
           created_at?: string;
+          tagline?: string | null;
+          description?: string | null;
+          logo_url?: string | null;
+          industry?: string | null;
+          requires_approval?: boolean;
+          allowed_domains?: string[];
+          is_discoverable?: boolean;
+          search_vector?: string | null;
         };
         Relationships: [];
       };
@@ -254,6 +317,43 @@ export interface Database {
           }
         ];
       };
+      memberships: {
+        Row: {
+          id: string;
+          user_id: string;
+          community_id: string;
+          role: string;
+          joined_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          community_id: string;
+          role?: string;
+          joined_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          community_id?: string;
+          role?: string;
+          joined_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "memberships_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "memberships_community_id_fkey";
+            columns: ["community_id"];
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: {
       users: {
@@ -285,3 +385,5 @@ export type MessageRow = Database['public']['Tables']['messages']['Row'];
 export type PostRow = Database['public']['Tables']['posts']['Row'];
 export type PostCommentRow = Database['public']['Tables']['post_comments']['Row'];
 export type UserViewRow = Database['public']['Views']['users']['Row'];
+
+export type MembershipRow = Database['public']['Tables']['memberships']['Row'];
