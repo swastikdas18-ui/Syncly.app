@@ -14,9 +14,11 @@
 --      - Direct client INSERT on memberships is restricted to 'member' or 'employee' role.
 --      - Direct client creation of 'admin' or 'owner' memberships is blocked.
 --   3. Preservation of Approved Join Request Workflow:
---      - Legitimate applicant enrollment via public.review_join_request() (SECURITY DEFINER)
---        is explicitly preserved by checking for an approved pending join request in the
---        same transaction before allowing admin insertion on behalf of an applicant.
+--      - Reconciles public.review_join_request() with trigger validation:
+--        Updates community_join_requests status to 'approved' FIRST before inserting
+--        the membership, allowing the trigger to verify an authentic 'approved' request
+--        reviewed by the current admin in the same transaction.
+--      - Rejects direct 3rd-party inserts without an approved request.
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
@@ -121,13 +123,6 @@ GRANT EXECUTE ON FUNCTION private.is_community_intern(UUID) TO authenticated, se
 
 -- ------------------------------------------------------------------------------
 -- 5. Trigger Function: Protect Membership Privileged Fields & Boundaries
--- Integrates:
---   - Rejection of client attempts to assign admin/owner roles directly.
---   - Rejection of unapproved 3rd-party membership creation while allowing
---     review_join_request() when an authentic approved join request exists.
---   - Owner-only administrative role transitions (promote/demote owner/admin).
---   - Strict self-escalation block.
---   - user_id and community_id immutability.
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.protect_membership_privileged_fields()
 RETURNS TRIGGER
@@ -166,24 +161,26 @@ BEGIN
           USING ERRCODE = '42501';
       END IF;
 
-      -- If inserting for another user (i.e. NEW.user_id != auth.uid()), verify:
+      -- If inserting for another user (NEW.user_id != auth.uid()), verify:
       -- 1. Caller is an active community admin/owner in the target community.
-      -- 2. An authentic join request exists in community_join_requests for this user and community.
+      -- 2. An authentic APPROVED join request exists for this applicant, community, and reviewer.
       IF NEW.user_id IS DISTINCT FROM auth.uid() THEN
         IF NOT private.is_community_admin(NEW.community_id) THEN
           RAISE EXCEPTION 'Permission denied: Only workspace administrators can enroll other users.'
             USING ERRCODE = '42501';
         END IF;
 
-        -- Check that a valid join request exists for this applicant and community
+        -- Strictly verify that an APPROVED request exists, reviewed by this admin
         SELECT EXISTS (
           SELECT 1 FROM public.community_join_requests r
           WHERE r.user_id = NEW.user_id
             AND r.community_id = NEW.community_id
+            AND r.status = 'approved'
+            AND r.reviewed_by = auth.uid()
         ) INTO v_has_approved_request;
 
         IF NOT v_has_approved_request THEN
-          RAISE EXCEPTION 'Permission denied: Cannot create membership without an associated join request.'
+          RAISE EXCEPTION 'Permission denied: Cannot create membership without an authorized approved join request.'
             USING ERRCODE = '42501';
         END IF;
       END IF;
@@ -241,13 +238,190 @@ FOR EACH ROW
 EXECUTE FUNCTION public.protect_membership_privileged_fields();
 
 -- ------------------------------------------------------------------------------
--- 6. Clean up any previous public helpers if they existed
+-- 6. Canonical Review Join Request Update (Transaction Reordering)
+-- Updates status to 'approved' FIRST before inserting membership row so the
+-- trigger can verify an authentic approved join request in the same transaction.
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.review_join_request(
+  p_request_id UUID,
+  p_action TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_req RECORD;
+  v_caller_id UUID;
+  v_reviewer_profile RECORD;
+  v_is_admin BOOLEAN;
+  v_requester_status TEXT;
+  v_existing_membership_id UUID;
+  v_new_membership_id UUID;
+BEGIN
+  -- 1. Validate authenticated caller
+  v_caller_id := auth.uid();
+  IF v_caller_id IS NULL THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'status', 401,
+      'error', 'Unauthorized. Cryptographically verified Supabase authentication required.'
+    );
+  END IF;
+
+  -- 2. Validate action input
+  IF p_action NOT IN ('approve', 'reject') THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'status', 400,
+      'error', 'Invalid action. Supported actions are: approve, reject.'
+    );
+  END IF;
+
+  -- 3. Validate reviewer profile exists and is active
+  SELECT status INTO v_reviewer_profile
+  FROM public.profiles
+  WHERE id = v_caller_id;
+
+  IF NOT FOUND OR v_reviewer_profile.status != 'active' THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'status', 403,
+      'error', 'Forbidden. Reviewer account is inactive, suspended, or does not exist.'
+    );
+  END IF;
+
+  -- 4. Lock the pending request row to prevent concurrent race conditions
+  SELECT * INTO v_req
+  FROM public.community_join_requests
+  WHERE id = p_request_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'status', 404,
+      'error', 'Join request not found.'
+    );
+  END IF;
+
+  -- 5. Validate request is currently pending
+  IF v_req.status != 'pending' THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'status', 409,
+      'error', 'Join request is already ' || v_req.status || '.'
+    );
+  END IF;
+
+  -- 6. Reject self-approval (Reviewer cannot approve/reject their own request)
+  IF v_req.user_id = v_caller_id THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'status', 403,
+      'error', 'Self-approval forbidden. Reviewer cannot review their own join request.'
+    );
+  END IF;
+
+  -- 7. Validate active owner/admin membership in the target tenant
+  SELECT private.is_community_admin(v_req.community_id) INTO v_is_admin;
+
+  IF NOT v_is_admin THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'status', 403,
+      'error', 'Forbidden. Only active admins or owners of this workspace can review join requests.'
+    );
+  END IF;
+
+  -- 8. Validate applicant profile exists and is active
+  SELECT status INTO v_requester_status
+  FROM public.profiles
+  WHERE id = v_req.user_id;
+
+  IF NOT FOUND OR v_requester_status IS NULL OR v_requester_status != 'active' THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'status', 403,
+      'error', 'Requester account is deactivated, suspended, or does not exist.'
+    );
+  END IF;
+
+  -- 9. Check for an existing membership explicitly (Deterministic conflict handling)
+  IF p_action = 'approve' THEN
+    SELECT id INTO v_existing_membership_id
+    FROM public.memberships
+    WHERE user_id = v_req.user_id
+      AND community_id = v_req.community_id
+    LIMIT 1;
+
+    IF v_existing_membership_id IS NOT NULL THEN
+      UPDATE public.community_join_requests
+      SET status = 'approved',
+          reviewed_by = v_caller_id,
+          reviewed_at = NOW()
+      WHERE id = p_request_id;
+
+      RETURN jsonb_build_object(
+        'success', false,
+        'status', 409,
+        'error', 'Conflict. Applicant already holds active membership in this workspace.',
+        'membership_id', v_existing_membership_id
+      );
+    END IF;
+
+    -- 10. Update the request status to 'approved' FIRST in transaction
+    UPDATE public.community_join_requests
+    SET status = 'approved',
+        reviewed_by = v_caller_id,
+        reviewed_at = NOW()
+    WHERE id = p_request_id;
+
+    -- 11. Create exactly one membership with server-controlled role 'member'
+    INSERT INTO public.memberships (user_id, community_id, role, joined_at)
+    VALUES (v_req.user_id, v_req.community_id, 'member', NOW())
+    RETURNING id INTO v_new_membership_id;
+
+    RETURN jsonb_build_object(
+      'success', true,
+      'status', 200,
+      'action', 'approved',
+      'membership_id', v_new_membership_id,
+      'community_id', v_req.community_id,
+      'message', 'Join request approved and membership created.'
+    );
+  ELSE
+    -- Action = 'reject'
+    UPDATE public.community_join_requests
+    SET status = 'rejected',
+        reviewed_by = v_caller_id,
+        reviewed_at = NOW()
+    WHERE id = p_request_id;
+
+    RETURN jsonb_build_object(
+      'success', true,
+      'status', 200,
+      'action', 'rejected',
+      'community_id', v_req.community_id,
+      'message', 'Join request rejected.'
+    );
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.review_join_request(UUID, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.review_join_request(UUID, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.review_join_request(UUID, TEXT) TO authenticated, service_role;
+
+-- ------------------------------------------------------------------------------
+-- 7. Clean up any previous public helpers if they existed
 -- ------------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.is_community_admin(UUID);
 DROP FUNCTION IF EXISTS public.is_community_intern(UUID);
 
 -- ------------------------------------------------------------------------------
--- 7. Refactor Policies on public.memberships
+-- 8. Refactor Policies on public.memberships
 -- ------------------------------------------------------------------------------
 DROP POLICY IF EXISTS "Users can view their own memberships" ON public.memberships;
 CREATE POLICY "Users can view their own memberships"
@@ -287,7 +461,7 @@ WITH CHECK (
 );
 
 -- ------------------------------------------------------------------------------
--- 8. Refactor Policy on public.posts (INSERT)
+-- 9. Refactor Policy on public.posts (INSERT)
 -- ------------------------------------------------------------------------------
 DROP POLICY IF EXISTS tenant_isolation_posts_insert ON public.posts;
 CREATE POLICY tenant_isolation_posts_insert ON public.posts
@@ -298,7 +472,7 @@ CREATE POLICY tenant_isolation_posts_insert ON public.posts
   );
 
 -- ------------------------------------------------------------------------------
--- 9. Refactor Policy on public.audit_logs (SELECT)
+-- 10. Refactor Policy on public.audit_logs (SELECT)
 -- ------------------------------------------------------------------------------
 DROP POLICY IF EXISTS audit_logs_admin_select ON public.audit_logs;
 CREATE POLICY audit_logs_admin_select ON public.audit_logs
@@ -307,7 +481,7 @@ CREATE POLICY audit_logs_admin_select ON public.audit_logs
   );
 
 -- ------------------------------------------------------------------------------
--- 10. Refactor Policy on public.community_join_requests (SELECT)
+-- 11. Refactor Policy on public.community_join_requests (SELECT)
 -- ------------------------------------------------------------------------------
 DROP POLICY IF EXISTS "Admins can view community join requests" ON public.community_join_requests;
 CREATE POLICY "Admins can view community join requests"
