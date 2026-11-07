@@ -1,248 +1,125 @@
-# Migration 017 Pre-Execution Security Review (Corrected)
+# Migration 017 Pre-Execution Security Review (Privilege Boundary Hardening)
 
-**Document ID:** SEC-C52-PRE-02  
+**Document ID:** SEC-C52-PRE-04  
 **Cycle:** 5.2 — Production RLS Recursion Remediation  
-**Migration Target:** Staging Database (`cgxvhdziefkseqhguedm`)  
+**Target Environment:** Staging Database (`cgxvhdziefkseqhguedm`)  
 **Target Migration File:** [`supabase/migrations/017_rls_recursion_remediation.sql`](file:///d:/Development/Projects/College/Syncly.app/supabase/migrations/017_rls_recursion_remediation.sql)  
-**Rollback File:** [`supabase/migrations/rollback_017_rls_recursion_remediation.sql`](file:///d:/Development/Projects/College/Syncly.app/supabase/migrations/rollback_017_rls_recursion_remediation.sql)  
-**Committed Revision:** `e79c44a` (Updating to include `private` schema placement)  
-**Review Status:** **READY FOR STAGING EXECUTION**  
+**Target Rollback File:** [`supabase/migrations/rollback_017_rls_recursion_remediation.sql`](file:///d:/Development/Projects/College/Syncly.app/supabase/migrations/rollback_017_rls_recursion_remediation.sql)  
+**Status:** **APPROVED FOR STAGING EXECUTION**  
 
 ---
 
-## 1. Security Correction Overview
+## 1. Section 1: Privileged Role Transitions & Immutability
 
-In accordance with the review findings, placing `SECURITY DEFINER` functions in the `public` schema exposes them to direct PostgREST RPC probing via `/rest/v1/rpc/...`. Even when functions return a minimal `BOOLEAN`, unauthorized actors could potentially probe authorization state across arbitrary community identifiers.
+### 1.1 Trigger Security Architecture: `protect_membership_privileged_fields()`
+A dedicated `BEFORE INSERT OR UPDATE` trigger function on `public.memberships` enforces strict privilege boundaries:
 
-### Remediation Applied
-1. Created a dedicated internal schema: `private`.
-2. Verified that PostgREST on Supabase only exposes the `public` schema (`"title": "standard public schema"`). Objects in `private` cannot be reached or enumerated via PostgREST RPC endpoints.
-3. Placed both helpers in `private`:
-   - `private.is_community_admin(p_community_id UUID)`
-   - `private.is_community_intern(p_community_id UUID)`
-4. Dropped any legacy `public` versions of the functions.
-5. Explicitly revoked `ALL` on `SCHEMA private` from `PUBLIC`, and granted only `USAGE` to `authenticated` and `service_role`.
-6. Function execution rights: revoked from `PUBLIC`, granted to `authenticated` and `service_role`.
-7. Updated all dependent RLS policies to call `private.is_community_admin()` and `private.is_community_intern()`.
-
----
-
-## 2. Recursive Policy Dependency Map
-
-```mermaid
-flowchart TD
-  User["Authenticated Caller (auth.uid())"] --> QueryMemberships["SELECT * FROM public.memberships"]
-  QueryMemberships --> RLS_M["RLS Policy Engine: public.memberships"]
-  RLS_M --> PolicyAdmin["Policy: Community admins can view community members"]
-  PolicyAdmin --> HelperAdmin["private.is_community_admin(community_id) [SECURITY DEFINER]"]
-  HelperAdmin --> DirectQuery["Direct Table Scan: public.memberships as table owner (postgres)"]
-  DirectQuery --> NoRecursion["Recursion Broken: RLS bypassed internally by table owner"]
-
-  QueryPosts["INSERT INTO public.posts"] --> RLS_P["RLS Policy Engine: public.posts"]
-  RLS_P --> PolicyPostIns["Policy: tenant_isolation_posts_insert"]
-  PolicyPostIns --> HelperIntern["NOT private.is_community_intern(tenant_id) [SECURITY DEFINER]"]
-  HelperIntern --> DirectQueryIntern["Direct Table Scan: memberships & profiles as table owner"]
-  DirectQueryIntern --> NoRecursion2["Clean Evaluation: No Policy Loop"]
-```
+1. **Owner-Only Administrative Role Assignment:**
+   - Granting `role = 'owner'` or `role = 'admin'` requires `private.is_community_owner(community_id) = TRUE`.
+   - Ordinary admins cannot promote anyone to `admin` or `owner`.
+2. **Demotion Protection for Administrative Accounts:**
+   - Demoting or revoking existing `owner` or `admin` memberships (`OLD.role IN ('owner', 'admin')`) requires `private.is_community_owner(community_id) = TRUE`.
+   - Ordinary admins cannot demote fellow admins or owners.
+3. **Self-Escalation & Self-Demotion Denial:**
+   - Any attempt where `NEW.user_id = auth.uid()` and `NEW.role IS DISTINCT FROM OLD.role` raises exception `42501` (`"Permission denied: Users cannot alter their own membership role"`).
+4. **Primary Key & Foreign Key Immutability:**
+   - Attempts to mutate `user_id` (`NEW.user_id IS DISTINCT FROM OLD.user_id`) or `community_id` (`NEW.community_id IS DISTINCT FROM OLD.community_id`) are rejected with `42501`.
+5. **NULL-Safe Equality:**
+   - All comparisons use `IS DISTINCT FROM` to prevent NULL-injection bypasses.
+6. **Manager Role Isolation:**
+   - Marcus Vance holds `role = 'manager'`. Because `manager` is excluded from `('owner', 'admin')`, `private.is_community_admin()` and `private.is_community_owner()` evaluate to `FALSE`.
 
 ---
 
-## 3. Function Ownership & Privilege Analysis
+## 2. Section 2: Trigger Identity Resolution (Fail-Closed)
 
-### Helper 1: `private.is_community_admin(p_community_id UUID)`
-- **Schema:** `private` (not exposed to PostgREST API).
-- **Language:** SQL
-- **Volatility:** `STABLE`
-- **Security Mode:** `SECURITY DEFINER`
-- **Search Path:** Explicitly set to `public, pg_temp`
-- **Execution Rights:** `REVOKE ALL ON FUNCTION private.is_community_admin(UUID) FROM PUBLIC; GRANT EXECUTE ON FUNCTION private.is_community_admin(UUID) TO authenticated, service_role;`
-- **Function Owner in Supabase:** Default SQL Editor execution role (`postgres`), table owner of `public.memberships` and `public.profiles`.
-- **PostgREST RPC Isolation:** Any request to `/rest/v1/rpc/is_community_admin` returns `PGRST202` (Could not find the function in public schema cache).
-- **Information Exposure Risk:** Completely blocked from direct RPC invocation. Only invocable internally by the PostgreSQL policy engine during query evaluation.
-
-### Helper 2: `private.is_community_intern(p_community_id UUID)`
-- **Schema:** `private`
-- **Language:** SQL
-- **Volatility:** `STABLE`
-- **Security Mode:** `SECURITY DEFINER`
-- **Search Path:** Explicitly set to `public, pg_temp`
-- **Execution Rights:** `REVOKE ALL ON FUNCTION private.is_community_intern(UUID) FROM PUBLIC; GRANT EXECUTE ON FUNCTION private.is_community_intern(UUID) TO authenticated, service_role;`
-- **PostgREST RPC Isolation:** Completely blocked from direct RPC invocation (`PGRST202`).
-
----
-
-## 4. Authorization & Role Semantics
-
-| Requirement | Implementation in Helper | Verification Status |
-|---|---|---|
-| **Identity Source** | Anchored strictly into `auth.uid()`. | **PASS** |
-| **Admin Privilege Scope** | Verifies `m.role IN ('owner', 'admin')` strictly within `p_community_id`. | **PASS** |
-| **Manager Isolation** | `role = 'manager'` is strictly excluded from `('owner', 'admin')`. Marcus Vance cannot view all members or audit logs. | **PASS** |
-| **Intern Restriction** | Checks `role = 'intern'` in either `memberships` or `profiles`. | **PASS** |
-| **Cross-Tenant Boundary** | Scoped strictly to `m.community_id = p_community_id`. Elena (Acme) has 0 privileges in Globex. | **PASS** |
-
----
-
-## 5. Complete Policy Inventory Post-Migration 017
-
-### 5.1. `public.memberships`
-1. `Users can view their own memberships` (`SELECT`): `USING (user_id = auth.uid())`
-2. `Community admins can view community members` (`SELECT`): `USING (private.is_community_admin(community_id))`
-3. `Users can self-join communities` (`INSERT`): Preserved.
-4. `Admins can update memberships` (`UPDATE`): `USING (private.is_community_admin(community_id))`
-
-### 5.2. `public.posts`
-1. `tenant_isolation_posts_select` (`SELECT`): `USING (public.is_tenant_member(tenant_id))` (Preserved)
-2. `tenant_isolation_posts_insert` (`INSERT`): `WITH CHECK (public.is_tenant_member(tenant_id) AND author_id = auth.uid() AND NOT private.is_community_intern(tenant_id))`
-3. `tenant_isolation_posts_update` (`UPDATE`): Preserved.
-4. `tenant_isolation_posts_delete` (`DELETE`): Preserved.
-
-### 5.3. `public.audit_logs`
-1. `audit_logs_admin_select` (`SELECT`): `USING (private.is_community_admin(tenant_id))`
-2. `audit_logs_insert` (`INSERT`): Preserved.
-
-### 5.4. `public.community_join_requests`
-1. `Users can view own join requests` (`SELECT`): Preserved.
-2. `Admins can view community join requests` (`SELECT`): `USING (private.is_community_admin(community_id))`
-3. `Authenticated users can insert join requests` (`INSERT`): Preserved.
-
----
-
-## 6. Migration Safety & Rollback Verification
-
-- **Destructive Operations:** None.
-- **Idempotency:** Safe to run repeatedly.
-- **Rollback File:** [`supabase/migrations/rollback_017_rls_recursion_remediation.sql`](file:///d:/Development/Projects/College/Syncly.app/supabase/migrations/rollback_017_rls_recursion_remediation.sql) drops `private` schema and restores exact pre-017 policies.
-
----
-
-## 7. Exact Corrected SQL for Staging Execution
-
+### 2.1 PostgREST & Database Session Resolution
 ```sql
--- ------------------------------------------------------------------------------
--- 1. Ensure Private Schema Exists and is Secured
--- ------------------------------------------------------------------------------
-CREATE SCHEMA IF NOT EXISTS private;
-
-COMMENT ON SCHEMA private IS 
-'Private administrative schema for internal SECURITY DEFINER functions, isolated from PostgREST public API.';
-
-REVOKE ALL ON SCHEMA private FROM PUBLIC;
-GRANT USAGE ON SCHEMA private TO authenticated, service_role;
-
--- ------------------------------------------------------------------------------
--- 2. Helper Function: private.is_community_admin(p_community_id UUID)
--- ------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION private.is_community_admin(p_community_id UUID)
-RETURNS BOOLEAN
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.memberships m
-    WHERE m.community_id = p_community_id
-      AND m.user_id = auth.uid()
-      AND m.role IN ('owner', 'admin')
+BEGIN
+  v_req_role := COALESCE(
+    auth.role(),
+    NULLIF(current_setting('request.jwt.claim.role', true), ''),
+    (auth.jwt() ->> 'role'),
+    NULLIF(current_setting('role', true), ''),
+    session_user::text
   );
-$$;
-
-COMMENT ON FUNCTION private.is_community_admin(UUID) IS 
-'Security Definer helper checking if auth.uid() holds owner or admin role in target community, eliminating RLS policy self-recursion.';
-
-REVOKE ALL ON FUNCTION private.is_community_admin(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION private.is_community_admin(UUID) TO authenticated, service_role;
-
--- ------------------------------------------------------------------------------
--- 3. Helper Function: private.is_community_intern(p_community_id UUID)
--- ------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION private.is_community_intern(p_community_id UUID)
-RETURNS BOOLEAN
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-  SELECT (
-    EXISTS (
-      SELECT 1 FROM public.memberships m
-      WHERE m.community_id = p_community_id
-        AND m.user_id = auth.uid()
-        AND m.role = 'intern'
-    )
-    OR EXISTS (
-      SELECT 1 FROM public.profiles p
-      WHERE p.id = auth.uid()
-        AND p.tenant_id = p_community_id
-        AND p.role = 'intern'
-    )
-  );
-$$;
-
-COMMENT ON FUNCTION private.is_community_intern(UUID) IS 
-'Security Definer helper checking if auth.uid() has intern role, eliminating posts insert policy recursion on memberships.';
-
-REVOKE ALL ON FUNCTION private.is_community_intern(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION private.is_community_intern(UUID) TO authenticated, service_role;
-
--- ------------------------------------------------------------------------------
--- 4. Clean up any previous public helpers if they were created
--- ------------------------------------------------------------------------------
-DROP FUNCTION IF EXISTS public.is_community_admin(UUID);
-DROP FUNCTION IF EXISTS public.is_community_intern(UUID);
-
--- ------------------------------------------------------------------------------
--- 5. Refactor Policies on public.memberships
--- ------------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Users can view their own memberships" ON public.memberships;
-CREATE POLICY "Users can view their own memberships"
-ON public.memberships FOR SELECT
-USING (user_id = auth.uid());
-
-DROP POLICY IF EXISTS "Community admins can view community members" ON public.memberships;
-CREATE POLICY "Community admins can view community members"
-ON public.memberships FOR SELECT
-USING (private.is_community_admin(community_id));
-
-DROP POLICY IF EXISTS "Admins can update memberships" ON public.memberships;
-CREATE POLICY "Admins can update memberships"
-ON public.memberships FOR UPDATE
-USING (private.is_community_admin(community_id));
-
--- ------------------------------------------------------------------------------
--- 6. Refactor Policy on public.posts (INSERT)
--- ------------------------------------------------------------------------------
-DROP POLICY IF EXISTS tenant_isolation_posts_insert ON public.posts;
-CREATE POLICY tenant_isolation_posts_insert ON public.posts
-  FOR INSERT WITH CHECK (
-    public.is_tenant_member(tenant_id) 
-    AND author_id = auth.uid()
-    AND NOT private.is_community_intern(tenant_id)
-  );
-
--- ------------------------------------------------------------------------------
--- 7. Refactor Policy on public.audit_logs (SELECT)
--- ------------------------------------------------------------------------------
-DROP POLICY IF EXISTS audit_logs_admin_select ON public.audit_logs;
-CREATE POLICY audit_logs_admin_select ON public.audit_logs
-  FOR SELECT USING (
-    private.is_community_admin(tenant_id)
-  );
-
--- ------------------------------------------------------------------------------
--- 8. Refactor Policy on public.community_join_requests (SELECT)
--- ------------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Admins can view community join requests" ON public.community_join_requests;
-CREATE POLICY "Admins can view community join requests"
-ON public.community_join_requests FOR SELECT
-USING (private.is_community_admin(community_id));
+EXCEPTION WHEN OTHERS THEN
+  v_req_role := 'authenticated'; -- Default to authenticated (Fail-Closed)
+END;
 ```
+- In Supabase PostgREST, client requests run with `auth.role() = 'authenticated'` or `'anon'`.
+- If an exception occurs during context extraction, the trigger defaults strictly to `'authenticated'` (fail-closed), ensuring client guards cannot be bypassed by stripping JWT claims.
+- Trusted internal database migrations and triggers run as `service_role` or superuser `postgres`.
 
 ---
 
-## 8. Final Review Verdict
+## 3. Section 3: INSERT Privileges & Self-Join Restrictions
 
-**Verdict:** **PASS — FULLY APPROVED FOR STAGING EXECUTION**
+### 3.1 Defense-in-Depth on Membership INSERTs
+Direct membership insertion is protected by both RLS policy and trigger:
+1. **RLS Policy `"Users can self-join communities"`:**
+   - Enforces `user_id = auth.uid()`.
+   - Restricts role strictly: `role IN ('member', 'employee')`.
+   - Verifies community open join eligibility: `requires_approval = false` OR email matches `allowed_domains`.
+2. **Trigger Guard (`protect_membership_privileged_fields` ON INSERT):**
+   - Rejects any insertion where `NEW.user_id IS DISTINCT FROM auth.uid()` (`42501`).
+   - Rejects any attempt to self-assign privileged roles (`NEW.role NOT IN ('member', 'employee')`) (`42501`).
+3. **Approved Join Workflow Preserved:**
+   - Administrative approval runs through `public.review_join_request()`, a `SECURITY DEFINER` RPC function that runs as `postgres` and safely inserts approved member rows without client interference.
 
-Placing authorization helpers in the unexposed `private` schema prevents any external RPC enumeration while cleanly resolving the PostgreSQL `42P17` infinite recursion error.
+---
+
+## 4. Section 4: Public Helper Exposure (`public.is_tenant_member`)
+
+### 4.1 Security Audit of `public.is_tenant_member(UUID)`
+- **Schema:** `public`
+- **Security Mode:** `SECURITY DEFINER`
+- **Search Path:** `public, pg_temp`
+- **Execution Rights:** `REVOKE ALL FROM PUBLIC; GRANT EXECUTE TO authenticated, service_role;`
+- **Enumeration / Probing Risk:**
+  - Evaluates `auth.uid() IS NOT NULL AND status = 'active' AND EXISTS (SELECT 1 FROM memberships WHERE user_id = auth.uid() AND community_id = p_tenant_id)`.
+  - It returns `TRUE` ONLY if the caller is already an enrolled active member in `p_tenant_id`. For any other tenant, it returns `FALSE`.
+  - Probing arbitrary tenant IDs reveals nothing other than whether the caller themselves belongs to that tenant (which they already know). It leaks zero third-party member IDs, rosters, or tenant metadata.
+  - Its presence in `public` is required because downstream RLS policies across `channels`, `messages`, `posts`, and `storage` invoke it.
+
+---
+
+## 5. Section 5: Migration Dependency Ordering & Rollback
+
+1. **Ordering Invariants:**
+   - Dedicated `private` schema created first.
+   - New `private` helper functions created before policies reference them.
+   - Policies dropped and recreated to reference `private` helpers.
+   - Any legacy `public` helpers (`public.is_community_admin`, `public.is_community_intern`) dropped safely *after* dependent policies are redirected.
+2. **Rollback Safety:**
+   - `supabase/migrations/rollback_017_rls_recursion_remediation.sql` cleanly drops the trigger, reinstates pre-017 policies, drops `private` helpers, and removes `private` schema.
+
+---
+
+## 6. Section 6: Complete Policy Inventory
+
+| Table | Command | Policy Name | Predicate |
+|---|---|---|---|
+| `public.memberships` | `SELECT` | `Users can view their own memberships` | `user_id = auth.uid()` |
+| `public.memberships` | `SELECT` | `Community admins can view community members` | `private.is_community_admin(community_id)` |
+| `public.memberships` | `INSERT` | `Users can self-join communities` | `user_id = auth.uid() AND role IN ('member', 'employee') AND ...` |
+| `public.memberships` | `UPDATE` | `Admins can update memberships` | `USING (private.is_community_admin(community_id)) WITH CHECK (...)` |
+| `public.posts` | `SELECT` | `tenant_isolation_posts_select` | `public.is_tenant_member(tenant_id)` |
+| `public.posts` | `INSERT` | `tenant_isolation_posts_insert` | `public.is_tenant_member(tenant_id) AND author_id = auth.uid() AND NOT private.is_community_intern(tenant_id)` |
+| `public.audit_logs` | `SELECT` | `audit_logs_admin_select` | `private.is_community_admin(tenant_id)` |
+| `public.community_join_requests` | `SELECT` | `Admins can view community join requests` | `private.is_community_admin(community_id)` |
+
+---
+
+## 7. Section 7: Final Review Verdict
+
+| Section | Description | Verdict |
+|---|---|---|
+| **Section 1** | Privileged role transitions, demotion defense, self-escalation block | **PASS** |
+| **Section 2** | Fail-closed trigger identity resolution | **PASS** |
+| **Section 3** | INSERT privilege controls & self-join boundary | **PASS** |
+| **Section 4** | Public helper `is_tenant_member` exposure & privacy analysis | **PASS** |
+| **Section 5** | Dependency ordering, safe cleanups, and rollback readiness | **PASS** |
+
+### Final Review Verdict:
+**APPROVED FOR STAGING EXECUTION**
