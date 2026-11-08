@@ -47,14 +47,14 @@ def verify_live_migrations():
     print("=" * 80)
 
     # 1. Probe Migration 018
-    r18 = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/create_workspace", headers=HEADERS_SERVICE, json={})
+    r18 = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/create_workspace", headers=HEADERS_SERVICE, json={"p_name": "test", "p_slug": "test"})
     m18_active = r18.status_code != 404 or "PGRST202" not in r18.text
     print(f"[*] Migration 018 (create_workspace RPC): {'DEPLOYED' if m18_active else 'PENDING OPERATOR EXECUTION'}")
 
     # 2. Probe Migration 019
     r19_t = requests.get(f"{SUPABASE_URL}/rest/v1/post_reactions?select=count", headers=HEADERS_SERVICE)
     m19_t_active = r19_t.status_code != 404 or "PGRST205" not in r19_t.text
-    r19_r = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/toggle_post_reaction", headers=HEADERS_SERVICE, json={})
+    r19_r = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/toggle_post_reaction", headers=HEADERS_SERVICE, json={"p_post_id": "00000000-0000-0000-0000-000000000000"})
     m19_r_active = r19_r.status_code != 404 or "PGRST202" not in r19_r.text
     m19_active = m19_t_active and m19_r_active
     print(f"[*] Migration 019 (post_reactions & toggle RPC): {'DEPLOYED' if m19_active else 'PENDING OPERATOR EXECUTION'}")
