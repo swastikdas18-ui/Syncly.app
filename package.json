@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "echo 'No linter configured'",
     "typecheck": "tsc --noEmit",
-    "test": "python scripts/test_atomic_workspace_creation.py && python scripts/test_join_request_workflow.py"
+    "test": "python scripts/test_atomic_workspace_creation.py && python scripts/test_join_request_workflow.py && python scripts/test_reaction_database_integrity.py"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

@@ -76,6 +76,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to fetch posts: ' + error.message }, { status: 500 });
   }
 
+  // Derive user reactions from durable post_reactions table
+  const postIds = (dbPosts || []).map((p: any) => p.id);
+  const userLikedPostIds = new Set<string>();
+
+  if (postIds.length > 0) {
+    try {
+      const { data: reactions } = await (supabase.from('post_reactions') as any)
+        .select('post_id')
+        .eq('user_id', auth.userId)
+        .in('post_id', postIds);
+
+      if (reactions && Array.isArray(reactions)) {
+        for (const r of reactions) {
+          if (r.post_id) userLikedPostIds.add(r.post_id);
+        }
+      }
+    } catch {
+      // Graceful fallback for pre-migration environments
+    }
+  }
+
   // Format into Post frontend contract
   const formattedPosts: Post[] = (dbPosts || []).map((p: any) => {
     const author = p.profiles || {};
@@ -125,7 +146,7 @@ export async function GET(request: NextRequest) {
       mediaUrls: p.media_urls || [],
       likesCount: p.likes_count || 0,
       commentsCount: comments.length,
-      hasLiked: ((globalThis as any).__post_reactions?.get(p.id) as Set<string> | undefined)?.has(auth.userId) ?? false,
+      hasLiked: userLikedPostIds.has(p.id),
       createdAt: p.created_at,
       comments,
     };
