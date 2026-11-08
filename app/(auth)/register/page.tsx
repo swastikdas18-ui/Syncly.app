@@ -89,52 +89,84 @@ export default function RegisterPage() {
         </div>
 
         {errorMsg && (
-          <div className="mb-4 rounded-lg bg-rose-500/10 border border-rose-500/20 p-3 text-xs text-rose-400">
+          <div
+            id="register-error"
+            role="alert"
+            aria-live="polite"
+            className="mb-4 rounded-lg bg-rose-500/10 border border-rose-500/20 p-3 text-xs text-rose-400"
+          >
             {errorMsg}
           </div>
         )}
 
-        <form onSubmit={handleRegister} className="flex flex-col gap-4">
+        <form onSubmit={handleRegister} className="flex flex-col gap-4" noValidate>
           <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5">Full Name</label>
+            <label htmlFor="register-fullname" className="block text-xs font-medium text-zinc-300 mb-1.5">
+              Full Name <span className="text-indigo-400" aria-hidden="true">*</span>
+              <span className="sr-only">(required)</span>
+            </label>
             <input
+              id="register-fullname"
+              name="fullName"
               type="text"
               required
+              aria-required="true"
+              aria-invalid={!!errorMsg && !fullName.trim()}
+              aria-describedby={errorMsg ? 'register-error' : undefined}
+              autoComplete="name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Elena Rostova"
-              className="w-full h-11 px-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+              className="w-full h-11 px-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5">Corporate Email</label>
+            <label htmlFor="register-email" className="block text-xs font-medium text-zinc-300 mb-1.5">
+              Corporate Email <span className="text-indigo-400" aria-hidden="true">*</span>
+              <span className="sr-only">(required)</span>
+            </label>
             <input
+              id="register-email"
+              name="email"
               type="email"
               required
+              aria-required="true"
+              aria-invalid={!!errorMsg && !email.trim()}
+              aria-describedby={errorMsg ? 'register-error' : undefined}
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
-              className="w-full h-11 px-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+              className="w-full h-11 px-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5">Password</label>
+            <label htmlFor="register-password" className="block text-xs font-medium text-zinc-300 mb-1.5">
+              Password <span className="text-indigo-400" aria-hidden="true">*</span>
+              <span className="sr-only">(required, minimum 8 characters)</span>
+            </label>
             <input
+              id="register-password"
+              name="password"
               type="password"
               required
+              aria-required="true"
+              aria-invalid={!!errorMsg && password.length < 8}
+              aria-describedby={errorMsg ? 'register-error' : undefined}
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Minimum 8 characters"
-              className="w-full h-11 px-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+              className="w-full h-11 px-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-11 mt-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-medium text-sm transition-colors flex items-center justify-center disabled:opacity-50 cursor-pointer shadow-lg shadow-indigo-600/20"
+            className="w-full h-11 mt-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-medium text-sm transition-colors flex items-center justify-center disabled:opacity-50 cursor-pointer shadow-lg shadow-indigo-600/20 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-zinc-950"
           >
             {loading ? 'Creating account...' : 'Create Account'}
           </button>

@@ -16,6 +16,9 @@ export default function FeedDashboardPage() {
     async function loadFeed() {
       try {
         setLoading(true);
+        if (activeTenant?.id) {
+          api.setTenantId(activeTenant.id);
+        }
         const data = await api.getPosts('all');
         setPosts(data || []);
       } catch {

@@ -13,10 +13,14 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGci
  */
 export async function createClient(req?: NextRequest) {
   if (req) {
+    const authHeader = req.headers.get('authorization');
     return createServerClient<Database>(
       SUPABASE_URL,
       SUPABASE_ANON_KEY,
       {
+        global: {
+          headers: authHeader ? { Authorization: authHeader } : {},
+        },
         cookies: {
           getAll() {
             return req.cookies.getAll();

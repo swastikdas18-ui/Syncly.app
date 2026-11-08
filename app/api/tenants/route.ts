@@ -1,29 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { INITIAL_TENANTS, DEFAULT_TENANT_ID } from '@/src/lib/tenantContext.ts';
+import { createClient } from '@/lib/supabase/server.ts';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const tenants = INITIAL_TENANTS.length > 0 ? INITIAL_TENANTS : [
-    {
-      id: DEFAULT_TENANT_ID,
-      name: 'Acme Corporation',
-      slug: 'acme-corp',
-      tagline: 'Global Enterprise Systems & Operations',
-      memberCount: 142,
-      createdAt: '2026-01-15T00:00:00.000Z',
-      allowedDomains: ['acme.com', 'acmecorp.internal'],
-      isDiscoverable: true,
-      requiresApproval: false,
-      industry: 'Enterprise Software & Cloud Infrastructure',
-      ownerId: DEFAULT_TENANT_ID,
+  try {
+    const supabase = await createClient(request);
+    const { data: dbTenants, error } = await (supabase.from('tenants') as any)
+      .select('id, name, slug, tagline, description, logo_url, industry, requires_approval, allowed_domains, is_discoverable, created_at')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
-  ];
 
-  return NextResponse.json({
-    success: true,
-    count: tenants.length,
-    data: tenants,
-  });
+    const formattedTenants = (dbTenants || []).map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      slug: t.slug,
+      tagline: t.tagline || '',
+      description: t.description || '',
+      logoUrl: t.logo_url || undefined,
+      industry: t.industry || 'Technology',
+      requiresApproval: Boolean(t.requires_approval),
+      allowedDomains: t.allowed_domains || [],
+      isDiscoverable: Boolean(t.is_discoverable),
+      createdAt: t.created_at,
+      memberCount: 1,
+    }));
+
+    return NextResponse.json({
+      success: true,
+      count: formattedTenants.length,
+      data: formattedTenants,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
+  }
 }
-

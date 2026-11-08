@@ -20,7 +20,7 @@ export interface VerifiedAuthContext {
   error?: string;
 }
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isValidUUID(uuid: string | null | undefined): boolean {
   if (!uuid) return false;
@@ -57,6 +57,9 @@ export async function getVerifiedAuthContext(req?: NextRequest): Promise<Verifie
     // 1. Authoritative identity verification via Supabase Auth server
     const authHeader = req?.headers.get('authorization');
     const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined;
+    if (bearerToken) {
+      await supabase.auth.setSession({ access_token: bearerToken, refresh_token: '' }).catch(() => {});
+    }
     const { data: { user }, error: authError } = bearerToken ? await supabase.auth.getUser(bearerToken) : await supabase.auth.getUser();
 
     if (authError || !user) {

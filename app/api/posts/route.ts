@@ -1,72 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 import { checkRateLimit } from '@/lib/rate-limit.ts';
+import { createClient } from '@/lib/supabase/server.ts';
+import { Post, PostComment } from '@/src/types.ts';
 
 interface CreatePostPayload {
   title?: string;
   content: string;
   category?: 'announcement' | 'general' | 'spotlight' | 'qna' | 'event';
   mediaUrls?: string[];
-  authorId?: string;
-  authorName?: string;
-  authorRole?: string;
 }
-
-const ACME_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-
-const SEED_POSTS: CreatePostPayload[] = [
-  {
-    title: 'Welcome to Acme Corporation & Q1 Engineering Kickoff',
-    content: 'Welcome everyone to the new Syncly corporate platform! We are kicking off Q1 with major investments across our cloud platform, real-time message streams, and developer velocity tools. Check out the roadmap below.',
-    category: 'announcement',
-    authorId: '00000000-0000-0000-0000-000000000001',
-    authorName: 'Demo Mentor',
-    authorRole: 'admin',
-    mediaUrls: [
-      'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=80',
-    ],
-  },
-  {
-    title: 'Intern Cohort 2026 Welcome & Orientation',
-    content: 'A huge warm welcome to our 2026 Engineering and Product intern cohort! Be sure to join #general and check the Events tab for upcoming 1:1 mentorship matchings and architectural workshops.',
-    category: 'spotlight',
-    authorId: '00000000-0000-0000-0000-000000000001',
-    authorName: 'Demo Mentor',
-    authorRole: 'admin',
-    mediaUrls: [],
-  },
-  {
-    title: 'Distributed Systems & Edge Streaming Architecture Deep Dive',
-    content: 'Our infrastructure team just published the whitepaper on zero-latency multi-tenant SSE streaming with Postgres RLS safety. Join the technical review in #engineering this Thursday at 2 PM!',
-    category: 'general',
-    authorId: '00000000-0000-0000-0000-000000000001',
-    authorName: 'Demo Mentor',
-    authorRole: 'admin',
-    mediaUrls: [],
-  },
-];
-
-let inMemoryPosts: any[] = SEED_POSTS.map((sp, idx) => ({
-  id: `seed-post-${idx + 1}`,
-  tenantId: ACME_TENANT_ID,
-  authorId: sp.authorId,
-  authorName: sp.authorName,
-  authorRole: sp.authorRole,
-  authorInitials: 'DM',
-  title: sp.title || '',
-  content: sp.content,
-  category: sp.category || 'general',
-  mediaUrls: sp.mediaUrls || [],
-  likesCount: 12 - idx * 3,
-  commentsCount: 3 - idx,
-  createdAt: new Date(Date.now() - (idx + 1) * 3600000 * 5).toISOString(),
-}));
 
 /**
  * GET /api/posts
- * Returns paginated, tenant-scoped posts with author profile and comments.
- * Returns seeded posts for Acme Corporation when database rows are empty.
+ * Returns paginated, tenant-scoped posts with author profile and comments from PostgreSQL.
  */
 export async function GET(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
@@ -75,37 +22,130 @@ export async function GET(request: NextRequest) {
   }
 
   const tenantId = auth.activeTenantId;
-
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get('category') || 'all';
   const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
   const offset = parseInt(searchParams.get('offset') || '0', 10);
 
-  const tenantScopedPosts = inMemoryPosts.filter((p) => p.tenantId === tenantId);
-  const filtered = category === 'all'
-    ? tenantScopedPosts
-    : tenantScopedPosts.filter((p) => p.category.toLowerCase() === category.toLowerCase());
+  const supabase = await createClient(request);
 
-  const paginated = filtered.slice(offset, offset + limit);
+  let query = (supabase.from('posts') as any)
+    .select(`
+      id,
+      tenant_id,
+      author_id,
+      title,
+      content,
+      category,
+      media_urls,
+      likes_count,
+      comments_count,
+      created_at,
+      profiles:author_id (
+        id,
+        full_name,
+        avatar_url,
+        role
+      ),
+      post_comments (
+        id,
+        tenant_id,
+        post_id,
+        author_id,
+        content,
+        created_at,
+        profiles:author_id (
+          id,
+          full_name,
+          avatar_url,
+          role
+        )
+      )
+    `)
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (category && category !== 'all') {
+    query = query.eq('category', category.toLowerCase());
+  }
+
+  const { data: dbPosts, error } = await query;
+
+  if (error) {
+    return NextResponse.json({ error: 'Failed to fetch posts: ' + error.message }, { status: 500 });
+  }
+
+  // Format into Post frontend contract
+  const formattedPosts: Post[] = (dbPosts || []).map((p: any) => {
+    const author = p.profiles || {};
+    const authorName = author.full_name || 'Team Member';
+    const authorInitials = authorName
+      .split(' ')
+      .map((n: string) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || 'TM';
+
+    const comments: PostComment[] = (p.post_comments || []).map((c: any) => {
+      const cAuthor = c.profiles || {};
+      const cName = cAuthor.full_name || 'Team Member';
+      const cInitials = cName
+        .split(' ')
+        .map((n: string) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase() || 'TM';
+
+      return {
+        id: c.id,
+        tenantId: c.tenant_id,
+        postId: c.post_id,
+        authorId: c.author_id,
+        authorName: cName,
+        authorAvatar: cAuthor.avatar_url || undefined,
+        authorRole: cAuthor.role || 'employee',
+        authorInitials: cInitials,
+        content: c.content,
+        createdAt: c.created_at,
+      };
+    });
+
+    return {
+      id: p.id,
+      tenantId: p.tenant_id,
+      authorId: p.author_id,
+      authorName,
+      authorAvatar: author.avatar_url || undefined,
+      authorRole: author.role || 'employee',
+      authorInitials,
+      title: p.title || '',
+      content: p.content,
+      category: p.category || 'general',
+      mediaUrls: p.media_urls || [],
+      likesCount: p.likes_count || 0,
+      commentsCount: comments.length,
+      createdAt: p.created_at,
+      comments,
+    };
+  });
 
   return NextResponse.json({
     success: true,
     tenantId,
-    rlsContextSql: buildTenantSessionSql(tenantId),
     category,
     limit,
     offset,
-    count: filtered.length,
-    data: paginated,
+    count: formattedPosts.length,
+    data: formattedPosts,
   });
 }
 
 /**
  * POST /api/posts
- * Creates a new company update post tagged with authenticated author and isolated tenant_id.
+ * Creates a new company update post in PostgreSQL tagged with authenticated author and isolated tenant_id.
  */
 export async function POST(request: NextRequest) {
-  // Enforce cryptographically verified authentication
   const auth = await getVerifiedAuthContext(request);
   if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
     return NextResponse.json(
@@ -159,26 +199,74 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const newPost = {
-      id: crypto.randomUUID(),
-      tenantId: effectiveTenantId,
-      authorId: auth.userId,
-      authorName: auth.fullName || 'Team Member',
-      authorRole: auth.role || 'employee',
-      authorInitials: (auth.fullName || 'TM').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase(),
-      title: body.title?.trim() || '',
-      content: body.content.trim(),
-      category: body.category || 'general',
-      mediaUrls: Array.isArray(body.mediaUrls) ? body.mediaUrls : [],
+    const supabase = await createClient(request);
+
+    const { data: newPostRow, error: insertError } = await (supabase.from('posts') as any)
+      .insert({
+        tenant_id: effectiveTenantId,
+        author_id: auth.userId,
+        title: body.title?.trim() || '',
+        content: body.content.trim(),
+        category: body.category || 'general',
+        media_urls: Array.isArray(body.mediaUrls) ? body.mediaUrls : [],
+        likes_count: 0,
+        comments_count: 0,
+      })
+      .select(`
+        id,
+        tenant_id,
+        author_id,
+        title,
+        content,
+        category,
+        media_urls,
+        likes_count,
+        comments_count,
+        created_at,
+        profiles:author_id (
+          id,
+          full_name,
+          avatar_url,
+          role
+        )
+      `)
+      .single();
+
+    if (insertError) {
+      return NextResponse.json(
+        { error: 'Failed to create post: ' + insertError.message },
+        { status: 500 }
+      );
+    }
+
+    const author = newPostRow.profiles || {};
+    const authorName = author.full_name || auth.fullName || 'Team Member';
+    const authorInitials = authorName
+      .split(' ')
+      .map((n: string) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || 'TM';
+
+    const formattedPost: Post = {
+      id: newPostRow.id,
+      tenantId: newPostRow.tenant_id,
+      authorId: newPostRow.author_id,
+      authorName,
+      authorAvatar: author.avatar_url || undefined,
+      authorRole: author.role || auth.role || 'employee',
+      authorInitials,
+      title: newPostRow.title || '',
+      content: newPostRow.content,
+      category: newPostRow.category || 'general',
+      mediaUrls: newPostRow.media_urls || [],
       likesCount: 0,
       commentsCount: 0,
-      createdAt: new Date().toISOString(),
-      rlsContextSql: buildTenantSessionSql(effectiveTenantId),
+      createdAt: newPostRow.created_at,
+      comments: [],
     };
 
-    inMemoryPosts.unshift(newPost);
-
-    return NextResponse.json({ success: true, data: newPost }, { status: 201 });
+    return NextResponse.json({ success: true, data: formattedPost }, { status: 201 });
   } catch {
     return NextResponse.json(
       { error: 'Malformed JSON payload.' },

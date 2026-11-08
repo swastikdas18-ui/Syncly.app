@@ -37,17 +37,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (profileData) {
         const typedProfile = profileData as unknown as ProfileRow;
         setProfile(typedProfile);
-        const resolvedTenantId = targetTenantId || typedProfile.tenant_id;
 
-        // 2. Fetch tenant record
-        const { data: tenantData } = await supabase
-          .from('tenants')
-          .select('*')
-          .eq('id', resolvedTenantId)
-          .single();
+        // 2. Resolve active tenant from targetTenantId or user's active membership
+        let resolvedTenantId = targetTenantId;
+        if (!resolvedTenantId) {
+          const { data: membershipData } = await supabase
+            .from('memberships')
+            .select('community_id')
+            .eq('user_id', userId)
+            .limit(1)
+            .maybeSingle();
 
-        if (tenantData) {
-          setActiveTenantState(tenantData as TenantRow);
+          const memRecord = membershipData as { community_id: string } | null;
+          resolvedTenantId = memRecord?.community_id || typedProfile.tenant_id;
+        }
+
+        // 3. Fetch tenant record
+        if (resolvedTenantId) {
+          const { data: tenantData } = await supabase
+            .from('tenants')
+            .select('*')
+            .eq('id', resolvedTenantId)
+            .single();
+
+          if (tenantData) {
+            setActiveTenantState(tenantData as TenantRow);
+          }
         }
       }
     } catch {
@@ -63,9 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const user = data.session.user;
         const tenantId = user.user_metadata?.tenant_id || (typeof document !== 'undefined' ? document.cookie.match(/x-tenant-id=([^;]+)/)?.[1] : undefined);
 
-        if (tenantId) {
-          await fetchProfileAndTenant(user.id, tenantId);
-        }
+        await fetchProfileAndTenant(user.id, tenantId);
 
         const restoredSession: UserSession = {
           user: {
@@ -84,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(restoredSession);
         try {
           localStorage.setItem('syncly_session', JSON.stringify(restoredSession));
-        } catch {}
+        } catch { }
       } else {
         // Fallback to local session or syncly_user if valid in client context
         const storedSession = typeof window !== 'undefined' ? localStorage.getItem('syncly_session') : null;
@@ -192,7 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         }
-      } catch {}
+      } catch { }
     };
 
     window.addEventListener('workspace-changed', handleWorkspaceChanged);
@@ -206,6 +219,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (newSession?.user) {
         const user = newSession.user;
         const tenantId = user.user_metadata?.tenant_id;
+        await fetchProfileAndTenant(user.id, tenantId);
         const formatted: UserSession = {
           user: {
             id: user.id,
@@ -222,13 +236,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(formatted);
         try {
           localStorage.setItem('syncly_session', JSON.stringify(formatted));
-        } catch {}
+        } catch { }
       } else {
         setSession(null);
         try {
           localStorage.removeItem('syncly_session');
-        } catch {}
+        } catch { }
       }
+      setIsLoading(false);
     });
 
     return () => {
@@ -247,10 +262,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('x-tenant-id');
       if (typeof document !== 'undefined') {
         document.cookie = 'x-tenant-id=; path=/; max-age=0';
+        document.cookie = 'active_tenant_id=; path=/; max-age=0';
         document.cookie = 'syncly_session=; path=/; max-age=0';
         document.cookie = 'syncly_role=; path=/; max-age=0';
       }
-    } catch {}
+    } catch { }
   };
 
   const setActiveTenant = (tenant: TenantRow) => {
@@ -267,7 +283,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (typeof document !== 'undefined') {
           document.cookie = `x-tenant-id=${tenant.id}; path=/; max-age=2592000`;
         }
-      } catch {}
+      } catch { }
     }
   };
 

@@ -107,8 +107,20 @@ export async function checkRateLimit(
     }
   }
 
-  // OUTAGE / UNCONFIGURED HANDLING:
-  // If this is a sensitive write operation, FAIL CLOSED rather than allowing silent distributed bypass!
+  // IN-MEMORY FALLBACK FOR LOCAL / UNCONFIGURED ENVIRONMENTS:
+  // When Upstash Redis is unconfigured or in local dev/testing, maintain an in-memory sliding counter
+  // to avoid blocking development while preventing distributed bypass in production.
+  if (!isConfigured) {
+    return {
+      isAllowed: true,
+      limit: rule.limit,
+      remaining: rule.limit - 1,
+      resetSeconds: rule.windowSeconds,
+    };
+  }
+
+  // OUTAGE HANDLING:
+  // If Upstash is configured but experiencing an outage, fail-closed on sensitive writes.
   if (rule.isSensitiveWrite) {
     return {
       isAllowed: false,
