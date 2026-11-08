@@ -49,49 +49,50 @@ export async function POST(request: NextRequest) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
-    const newCommunityId = crypto.randomUUID();
     const parsedDomains = Array.isArray(allowedDomains)
       ? allowedDomains.map((d: string) => d.trim().replace(/^@/, '').toLowerCase()).filter(Boolean)
       : [];
 
-    const newCommunity = {
-      id: newCommunityId,
-      name: name.trim(),
-      slug: cleanSlug,
-      tagline: (tagline || description || 'Enterprise Corporate Community').trim(),
-      memberCount: 1,
-      createdAt: new Date().toISOString(),
-      logoUrl: logoUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${cleanSlug}`,
-      allowedDomains: parsedDomains.length > 0 ? parsedDomains : [],
-      isDiscoverable: isDiscoverable !== false,
-      requiresApproval: requiresApproval === true,
-      industry: industry || 'Technology',
-    };
-
     const supabase = await createClient(request);
 
-    // Insert new tenant record
-    await supabase.from('tenants').insert({
-      id: newCommunityId,
-      name: newCommunity.name,
-      slug: newCommunity.slug,
-    } as any);
+    // Call atomic PostgreSQL RPC to create tenant, initial owner membership, and audit log
+    const { data: rpcResult, error: rpcError } = await (supabase.rpc as any)('create_workspace', {
+      p_name: name.trim(),
+      p_slug: cleanSlug,
+      p_tagline: tagline?.trim() || null,
+      p_description: description?.trim() || null,
+      p_logo_url: logoUrl?.trim() || null,
+      p_industry: industry?.trim() || null,
+      p_allowed_domains: parsedDomains,
+      p_requires_approval: requiresApproval === true,
+      p_is_discoverable: isDiscoverable !== false,
+    });
 
-    // Enforce database membership: Creator is designated as 'owner' in public.memberships
-    await supabase.from('memberships').insert({
-      user_id: auth.userId,
-      community_id: newCommunityId,
-      role: 'owner',
-    } as any);
+    if (rpcError) {
+      // Fallback for unexpected database errors
+      return NextResponse.json(
+        { error: 'Failed to create workspace: ' + (rpcError.message || 'Database error') },
+        { status: 500 }
+      );
+    }
 
+    if (!rpcResult || !rpcResult.success) {
+      const statusCode = rpcResult?.status || 400;
+      return NextResponse.json(
+        { error: rpcResult?.error || 'Workspace creation rejected.' },
+        { status: statusCode }
+      );
+    }
+
+    const createdData = rpcResult.data;
     const response = NextResponse.json({
       success: true,
-      data: newCommunity,
+      data: createdData,
       message: `Community created successfully. Creator assigned role = 'owner'.`,
-      rlsContextSql: buildTenantSessionSql(newCommunityId),
+      rlsContextSql: buildTenantSessionSql(createdData.id),
     }, { status: 201 });
 
-    response.cookies.set('active_tenant_id', newCommunityId, {
+    response.cookies.set('active_tenant_id', createdData.id, {
       path: '/',
       maxAge: 86400,
       sameSite: 'lax',
