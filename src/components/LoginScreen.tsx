@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ShieldCheck, Mail, Lock, ArrowRight, Building2, User, Loader2, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, ArrowRight, User, Loader2, AlertCircle } from 'lucide-react';
 import { UserSession } from '../types.ts';
 import { supabase } from '@/lib/supabase.ts';
 
@@ -44,7 +44,7 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
           return;
         }
 
-        // 1. Sign up via official Supabase Auth
+        // Sign up via official Supabase Auth
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
@@ -60,7 +60,7 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
           throw signUpError;
         }
 
-        if (data.user) {
+        if (data.user && data.session) {
           const userSession: UserSession = {
             user: {
               id: data.user.id,
@@ -72,7 +72,7 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
               avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanEmail)}`,
               hasCompletedOnboarding: false,
             },
-            token: data.session?.access_token || `token-${data.user.id}`,
+            token: data.session.access_token,
           };
 
           saveSession(userSession);
@@ -82,21 +82,21 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
           setMode('signin');
         }
       } else {
-        // 2. Sign in via official Supabase Auth
+        // Sign in via official Supabase Auth
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
           email: cleanEmail,
           password,
         });
 
         if (signInError) {
-          setError(signInError.message || 'Invalid email or password. You can also use a Demo Persona below.');
+          setError(signInError.message || 'Invalid email or password.');
           setIsLoading(false);
           return;
         }
 
         if (data.session && data.user) {
           const user = data.user;
-          const tenantId = user.user_metadata?.tenant_id || defaultTenantId || '00000000-0000-0000-0000-000000000001';
+          const tenantId = user.user_metadata?.tenant_id || defaultTenantId || '';
           const userSession: UserSession = {
             user: {
               id: user.id,
@@ -118,58 +118,10 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
       }
     } catch (err: any) {
       console.warn('Authentication error:', err);
-      // Fallback: Check if the dev backend recognizes credentials or return user-facing error
-      try {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail, password, fullName: fullName.trim(), mode }),
-        });
-        const resData = await res.json();
-        if (res.ok && resData.session) {
-          saveSession(resData.session);
-          onLoginSuccess(resData.session, resData.session.user.hasCompletedOnboarding ? 'feed' : 'onboarding');
-          return;
-        }
-      } catch {}
-
-      setError(err?.message || 'Unable to connect to auth service. Try a demo persona below.');
+      setError(err?.message || 'Authentication service error. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleDemoLogin = (personaType: 'intern' | 'mentor') => {
-    const demoSession: UserSession = personaType === 'intern'
-      ? {
-          user: {
-            id: 'demo-intern-001',
-            email: 'alex.rivera@acme.corp',
-            fullName: 'Alex Rivera',
-            headline: 'Engineering Intern',
-            role: 'intern',
-            tenantId: '00000000-0000-0000-0000-000000000001',
-            avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128&h=128&fit=crop&crop=faces',
-            hasCompletedOnboarding: true,
-          },
-          token: 'demo-intern-token-valid',
-        }
-      : {
-          user: {
-            id: 'demo-mentor-001',
-            email: 'sarah.chen@acme.corp',
-            fullName: 'Sarah Chen',
-            headline: 'Principal Systems Architect & Mentor',
-            role: 'owner',
-            tenantId: '00000000-0000-0000-0000-000000000001',
-            avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=128&h=128&fit=crop&crop=faces',
-            hasCompletedOnboarding: true,
-          },
-          token: 'demo-mentor-token-valid',
-        };
-
-    saveSession(demoSession);
-    onLoginSuccess(demoSession, 'feed');
   };
 
   const handleGoogleAuth = async () => {
@@ -278,13 +230,16 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
         <form onSubmit={handleEmailAuth} className="space-y-4">
           {mode === 'signup' && (
             <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+              <label htmlFor="auth-fullname" className="block text-xs font-medium text-zinc-300 mb-1.5">
                 Full Name
               </label>
               <div className="relative">
                 <User className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
+                  id="auth-fullname"
+                  name="fullName"
                   type="text"
+                  autoComplete="name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Sarah Chen"
@@ -296,13 +251,16 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
           )}
 
           <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+            <label htmlFor="auth-email" className="block text-xs font-medium text-zinc-300 mb-1.5">
               Corporate Email Address
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
+                id="auth-email"
+                name="email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@company.com"
@@ -314,7 +272,7 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-medium text-zinc-300">
+              <label htmlFor="auth-password" className="text-xs font-medium text-zinc-300">
                 Password
               </label>
               {mode === 'signin' && (
@@ -326,7 +284,10 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
             <div className="relative">
               <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
+                id="auth-password"
+                name="password"
                 type="password"
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
@@ -392,34 +353,6 @@ export function LoginScreen({ onLoginSuccess, defaultTenantId }: LoginScreenProp
           </svg>
           <span>Continue with Google Workspace</span>
         </button>
-
-        {/* One-Click Demo Personas */}
-        <div className="mt-5 pt-4 border-t border-zinc-800">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-              Instant Access (Demo Personas)
-            </span>
-            <span className="text-[10px] text-blue-400 font-mono">1-Click Sign In</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('intern')}
-              className="py-2.5 px-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-700/80 hover:border-emerald-500/50 text-zinc-200 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
-            >
-              <User className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>Demo Intern</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('mentor')}
-              className="py-2.5 px-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-700/80 hover:border-blue-500/50 text-zinc-200 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
-            >
-              <Building2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-              <span>Demo Mentor</span>
-            </button>
-          </div>
-        </div>
 
         {/* Security Notice */}
         <p className="text-[11px] text-zinc-500 text-center mt-5">

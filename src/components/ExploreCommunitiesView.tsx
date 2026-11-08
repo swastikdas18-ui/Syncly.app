@@ -51,8 +51,8 @@ export const ExploreCommunitiesView: React.FC<ExploreCommunitiesViewProps> = ({
   const [inviteToken, setInviteToken] = useState('');
   const [inviteError, setInviteError] = useState<string | null>(null);
 
-  const userEmail = currentSession?.user?.email || 'sarah.chen@acmecorp.internal';
-  const userName = currentSession?.user?.fullName || 'Team Member';
+  const userEmail = currentSession?.user?.email || '';
+  const userName = currentSession?.user?.fullName || '';
   const detectedDomain = userEmail.includes('@') ? userEmail.split('@')[1] : '';
 
   const loadCommunities = async () => {

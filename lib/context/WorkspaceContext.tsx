@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Tenant } from '@/src/types.ts';
 import { api } from '@/src/lib/api.ts';
-import { INITIAL_TENANTS } from '@/src/lib/tenantContext.ts';
+import { supabase } from '@/lib/supabase.ts';
 
 export interface JoinedCommunity extends Tenant {
   userRole?: string;
@@ -22,23 +22,14 @@ interface WorkspaceContextType {
   isMounted: boolean;
 }
 
-export const DEFAULT_WORKSPACE = {
-  id: '00000000-0000-0000-0000-000000000001',
-  name: 'Acme Corporation',
-  slug: 'acme-corp',
-  role: 'owner',
-};
-
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
 
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCommunityId?: string }> = ({
   children,
-  initialCommunityId,
 }) => {
   const [isMounted, setIsMounted] = useState<boolean>(false);
-  const [allCommunities, setAllCommunities] = useState<Tenant[]>(INITIAL_TENANTS);
+  const [allCommunities, setAllCommunities] = useState<Tenant[]>([]);
   const [joinedCommunities, setJoinedCommunities] = useState<JoinedCommunity[]>([]);
-  // Anonymous visitors DO NOT default to Acme. activeCommunity is null until resolved from verified session.
   const [activeCommunity, setActiveCommunity] = useState<JoinedCommunity | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -90,6 +81,22 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
   }, []);
 
   const refreshMemberships = useCallback(async () => {
+    // Only attempt data fetch if user session actually exists
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        setJoinedCommunities([]);
+        setActiveCommunity(null);
+        setAllCommunities([]);
+        return;
+      }
+    } catch {
+      setJoinedCommunities([]);
+      setActiveCommunity(null);
+      setAllCommunities([]);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const [tenantsRes, membershipsRes] = await Promise.all([
@@ -103,7 +110,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
 
       if (membershipsRes && Array.isArray(membershipsRes) && membershipsRes.length > 0) {
         const enrichedJoined: JoinedCommunity[] = membershipsRes.map((m: any) => ({
-          ...(m.community || tenantsRes.find((t: any) => t.id === (m.community_id || m.communityId)) || INITIAL_TENANTS[0]),
+          ...(m.community || tenantsRes.find((t: any) => t.id === (m.community_id || m.communityId)) || {
+            id: m.community_id || m.communityId,
+            name: 'Workspace',
+            slug: 'workspace',
+          }),
           id: m.community_id || m.communityId,
           userRole: m.role || 'member',
           isMember: true,
@@ -117,12 +128,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
           return match || enrichedJoined[0] || null;
         });
       } else {
-        // Unauthenticated or user holds 0 memberships
+        // Authenticated user holds 0 memberships
         setJoinedCommunities([]);
         setActiveCommunity(null);
       }
     } catch {
-      // Unauthenticated visitor
       setJoinedCommunities([]);
       setActiveCommunity(null);
     } finally {
@@ -205,7 +215,7 @@ export function useWorkspace() {
   if (!context) {
     return {
       joinedCommunities: [],
-      allCommunities: INITIAL_TENANTS,
+      allCommunities: [],
       activeCommunity: null,
       switchCommunity: () => {},
       joinCommunity: async () => ({ status: 'error', message: 'No workspace context' }),

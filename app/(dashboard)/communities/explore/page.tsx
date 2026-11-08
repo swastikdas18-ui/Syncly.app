@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWorkspace, DEFAULT_WORKSPACE } from '@/lib/context/WorkspaceContext.tsx';
+import { useWorkspace } from '@/lib/context/WorkspaceContext.tsx';
 import { useTenant } from '@/lib/context/AuthContext.tsx';
 
 interface Community {
@@ -14,64 +14,32 @@ interface Community {
   members_count: number;
 }
 
-const DEFAULT_COMMUNITIES: Community[] = [
-  {
-    id: '00000000-0000-0000-0000-000000000001',
-    name: 'Acme Enterprise Tech',
-    slug: 'acme-tech',
-    description: 'Corporate engineering, platform operations, and enterprise architecture hub.',
-    industry: 'Technology',
-    members_count: 142,
-  },
-  {
-    id: '00000000-0000-0000-0000-000000000002',
-    name: 'Globex Digital Services',
-    slug: 'globex-digital',
-    description: 'Cloud systems consulting, digital innovation, and agile workflow management.',
-    industry: 'Consulting',
-    members_count: 89,
-  },
-  {
-    id: '00000000-0000-0000-0000-000000000003',
-    name: 'Nexus Cloud Infrastructure',
-    slug: 'nexus-cloud',
-    description: 'Distributed infrastructure, Kubernetes clusters, and multi-cloud systems.',
-    industry: 'Infrastructure',
-    members_count: 215,
-  },
-];
-
-export function ExploreCommunitiesView({ initialCommunities = DEFAULT_COMMUNITIES }: { initialCommunities?: Community[] }) {
+export default function ExploreCommunitiesPage() {
   const router = useRouter();
-  const { activeCommunity, switchCommunity } = useWorkspace();
-  const { activeTenant, setActiveTenant } = useTenant();
+  const { allCommunities, activeCommunity, switchCommunity } = useWorkspace();
+  const { activeTenant } = useTenant();
+
   const [searchQuery, setSearchQuery] = useState('');
 
-  const activeWorkspaceId = activeTenant?.id || activeCommunity?.id || DEFAULT_WORKSPACE.id;
+  // Map real database workspaces
+  const initialCommunities: Community[] = useMemo(() => {
+    return (allCommunities || []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      slug: t.slug,
+      description: t.tagline || (t as any).description || 'Corporate Workspace',
+      industry: (t as any).industry || 'General',
+      members_count: (t as any).memberCount || (t as any).members_count || 1,
+    }));
+  }, [allCommunities]);
 
-  const handleSwitchOrJoin = (community: Community) => {
-    // 1. Update Contexts
+  const activeWorkspaceId = activeTenant?.id || activeCommunity?.id || '';
+
+  const handleSelectWorkspace = (community: Community) => {
+    // 1. Switch context in WorkspaceContext
     switchCommunity(community.id);
-    setActiveTenant({
-      id: community.id,
-      name: community.name,
-      slug: community.slug,
-      created_at: new Date().toISOString(),
-    });
 
-    // 2. Set Cookies and LocalStorage
-    localStorage.setItem('active_tenant_id', community.id);
-    localStorage.setItem('active_community_id', community.id);
-    localStorage.setItem('x-tenant-id', community.id);
-    localStorage.setItem(
-      'syncly_workspace',
-      JSON.stringify({
-        id: community.id,
-        name: community.name,
-        slug: community.slug,
-        role: 'member',
-      })
-    );
+    // 2. Persist in cookies for Next.js Edge Middleware
     document.cookie = `active_tenant_id=${community.id}; path=/; max-age=86400; SameSite=Lax`;
     document.cookie = `active_community_id=${community.id}; path=/; max-age=86400; SameSite=Lax`;
     document.cookie = `x-tenant-id=${community.id}; path=/; max-age=86400; SameSite=Lax`;
@@ -112,46 +80,49 @@ export function ExploreCommunitiesView({ initialCommunities = DEFAULT_COMMUNITIE
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredCommunities.map((community) => (
-            <div key={community.id} className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/40 flex flex-col justify-between">
-              <div>
-                <h3 className="font-semibold text-zinc-100">{community.name}</h3>
-                <p className="text-xs text-zinc-400 mt-1">{community.description}</p>
-              </div>
+          {filteredCommunities.map((community) => {
+            const isCurrent = community.id === activeWorkspaceId;
+            return (
+              <div
+                key={community.id}
+                className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 hover:border-zinc-700 transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <h3 className="font-semibold text-zinc-100 text-base">{community.name}</h3>
+                    {community.industry && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 font-medium">
+                        {community.industry}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-zinc-400 line-clamp-2 mb-4 leading-relaxed">
+                    {community.description}
+                  </p>
+                </div>
 
-              <div className="mt-4 pt-3 border-t border-zinc-800 flex items-center justify-between">
-                <span className="text-xs text-zinc-500 font-mono">@{community.slug}</span>
-                {community.id === activeWorkspaceId ? (
-                  <span className="px-3 py-1 rounded-lg bg-zinc-800 text-xs font-semibold text-emerald-400 border border-emerald-500/20">
-                    Current Workspace
+                <div className="flex items-center justify-between pt-3 border-t border-zinc-800/60">
+                  <span className="text-xs text-zinc-500 font-medium">
+                    {community.members_count} {community.members_count === 1 ? 'member' : 'members'}
                   </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleSwitchOrJoin(community)}
-                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white transition-colors cursor-pointer"
-                  >
-                    Enter Workspace
-                  </button>
-                )}
+                  {isCurrent ? (
+                    <span className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                      Active Workspace
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleSelectWorkspace(community)}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
+                    >
+                      Switch to Workspace
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
-
-export default function ExploreCommunitiesPage() {
-  return (
-    <div className="w-full max-w-4xl mx-auto py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Explore Communities</h1>
-        <p className="text-sm text-zinc-400 mt-1">Discover and join verified corporate workspaces</p>
-      </div>
-      <ExploreCommunitiesView />
-    </div>
-  );
-}
-

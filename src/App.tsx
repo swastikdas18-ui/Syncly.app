@@ -111,8 +111,9 @@ export function WorkConnectHub() {
     }
   }, []);
 
-  // Load Tenants & Memberships on mount
+  // Load Tenants & Memberships on mount only when authenticated session exists
   useEffect(() => {
+    if (!session?.user?.id) return;
     api.getTenants().then((data) => {
       if (data && data.length > 0) {
         setTenants(data);
@@ -123,7 +124,7 @@ export function WorkConnectHub() {
       }
     });
     fetchMemberships();
-  }, [fetchMemberships]);
+  }, [session?.user?.id, fetchMemberships]);
 
   // Refresh posts & channels when activeTenant changes
   const refreshTenantData = useCallback(async (tenantId: string) => {
@@ -142,14 +143,15 @@ export function WorkConnectHub() {
   }, []);
 
   useEffect(() => {
-    if (activeTenant) {
+    if (session?.user?.id && activeTenant?.id) {
       refreshTenantData(activeTenant.id);
       fetchPendingRequests(activeTenant.id);
     }
-  }, [activeTenant, refreshTenantData, fetchPendingRequests]);
+  }, [session?.user?.id, activeTenant?.id, refreshTenantData, fetchPendingRequests]);
 
-  // Real-time Event Subscription
+  // Real-time Event Subscription (authenticated sessions only)
   useEffect(() => {
+    if (!session?.user?.id || !activeTenant?.id) return () => {};
     const unsubscribe = api.subscribeToEvents((event, data) => {
       const payload = data as {
         type?: string;

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
-import { INITIAL_TENANTS } from '@/src/lib/tenantContext.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 
 export async function POST(request: NextRequest) {
@@ -25,22 +24,41 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient(request);
+    
+    // Fetch live tenants from database
+    const { data: dbTenants } = await supabase
+      .from('tenants')
+      .select('id, name, slug, allowed_domains, requires_approval')
+      .in('id', communityIds);
+
     const joined: any[] = [];
 
-    for (const cId of communityIds) {
-      const comm = INITIAL_TENANTS.find((t) => t.id === cId);
-      if (!comm) continue;
-      const allowed = (comm.allowedDomains || []).map((d) => d.toLowerCase());
-      const domainMatches = domain ? allowed.includes(domain) : false;
+    if (dbTenants && Array.isArray(dbTenants)) {
+      for (const item of dbTenants) {
+        const comm = item as {
+          id: string;
+          name: string;
+          slug: string;
+          allowed_domains: string[] | null;
+          requires_approval: boolean | null;
+        };
 
-      if (domainMatches || !comm.requiresApproval) {
-        // Enforce DB membership
-        await supabase.from('memberships').insert({
-          user_id: auth.userId,
-          community_id: cId,
-          role: 'member',
-        } as any);
-        joined.push(comm);
+        const allowed = ((comm.allowed_domains || []) as string[]).map((d) => d.toLowerCase());
+        const domainMatches = domain ? allowed.includes(domain) : false;
+
+        if (domainMatches || !comm.requires_approval) {
+          // Enforce DB membership
+          await supabase.from('memberships').insert({
+            user_id: auth.userId,
+            community_id: comm.id,
+            role: 'member',
+          } as any);
+          joined.push({
+            id: comm.id,
+            name: comm.name,
+            slug: comm.slug,
+          });
+        }
       }
     }
 

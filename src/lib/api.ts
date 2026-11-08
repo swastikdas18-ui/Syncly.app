@@ -2,7 +2,7 @@ import { Post, Channel, ChatMessage, Tenant, PostComment, IsolationAuditResult, 
 import { DEFAULT_TENANT_ID, resolveTenantId } from './tenantContext.ts';
 
 class SynclyApiClient {
-  private currentTenantId: string = DEFAULT_TENANT_ID;
+  private currentTenantId: string = "";
   private sseSource: EventSource | null = null;
   private pollingTimer: any = null;
   private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
@@ -518,6 +518,7 @@ class SynclyApiClient {
   }
 
   private connectSse() {
+    if (!this.currentTenantId || !this.currentTenantId.includes("-")) return;
     if (typeof window === 'undefined') return;
 
     try {
@@ -531,9 +532,8 @@ class SynclyApiClient {
         return;
       }
 
-      const cleanTenant = (this.currentTenantId && this.currentTenantId.trim() !== '' && this.currentTenantId !== 'undefined' && this.currentTenantId !== 'null')
-        ? this.currentTenantId.trim()
-        : '00000000-0000-0000-0000-000000000001';
+      const cleanTenant = (this.currentTenantId && this.currentTenantId.includes('-')) ? this.currentTenantId.trim() : '';
+      if (!cleanTenant) return;
       const params = new URLSearchParams({ tenantId: cleanTenant });
       const sseUrl = `/api/events/stream?${params.toString()}`;
       const eventSource = new EventSource(sseUrl);
@@ -608,9 +608,8 @@ export function subscribeToEventsStream(
   if (typeof window === 'undefined') return () => {};
 
   // 1. Sanitize tenant ID (strip whitespace and prevent non-UUID fallbacks)
-  const cleanTenant = (tenantId && tenantId.trim() !== '' && tenantId !== 'undefined' && tenantId !== 'null')
-    ? tenantId.trim()
-    : '00000000-0000-0000-0000-000000000001';
+  const cleanTenant = (tenantId && tenantId.includes('-')) ? tenantId.trim() : '';
+  if (!cleanTenant) return () => {};
 
   // 2. Build URL safely without manual string concatenation
   const params = new URLSearchParams({ tenantId: cleanTenant });

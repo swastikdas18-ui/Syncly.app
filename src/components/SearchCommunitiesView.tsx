@@ -66,8 +66,8 @@ export const SearchCommunitiesView: React.FC<SearchCommunitiesViewProps> = ({
   const [requestNote, setRequestNote] = useState('');
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
 
-  const userEmail = currentSession?.user?.email || 'sarah.chen@acmecorp.internal';
-  const userName = currentSession?.user?.fullName || 'Team Member';
+  const userEmail = currentSession?.user?.email || '';
+  const userName = currentSession?.user?.fullName || '';
   const detectedDomain = userEmail.includes('@') ? userEmail.split('@')[1] : '';
 
   const loadData = async () => {

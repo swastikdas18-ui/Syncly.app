@@ -14,12 +14,12 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
   setActiveTenant: (tenant: TenantRow) => void;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Deterministic initial state for SSR / CSR first frame
   const [session, setSession] = useState<UserSession | null>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [activeTenant, setActiveTenantState] = useState<TenantRow | null>(null);
@@ -62,13 +62,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (tenantData) {
             setActiveTenantState(tenantData as TenantRow);
+          } else {
+            setActiveTenantState(null);
           }
+        } else {
+          setActiveTenantState(null);
         }
+      } else {
+        setProfile(null);
+        setActiveTenantState(null);
       }
     } catch {
-      // Handled silently
+      setProfile(null);
+      setActiveTenantState(null);
     }
   }, []);
+
+  const refreshProfile = useCallback(async () => {
+    if (session?.user?.id) {
+      await fetchProfileAndTenant(session.user.id, activeTenant?.id);
+    }
+  }, [session?.user?.id, activeTenant?.id, fetchProfileAndTenant]);
 
   const refreshSession = useCallback(async () => {
     setIsLoading(true);
@@ -76,7 +90,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data } = await supabase.auth.getSession();
       if (data?.session?.user) {
         const user = data.session.user;
-        const tenantId = user.user_metadata?.tenant_id || (typeof document !== 'undefined' ? document.cookie.match(/x-tenant-id=([^;]+)/)?.[1] : undefined);
+        const cookieTenant = typeof document !== 'undefined' ? document.cookie.match(/x-tenant-id=([^;]+)/)?.[1] : undefined;
+        const tenantId = user.user_metadata?.tenant_id || cookieTenant;
 
         await fetchProfileAndTenant(user.id, tenantId);
 
@@ -95,85 +110,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
 
         setSession(restoredSession);
-        try {
-          localStorage.setItem('syncly_session', JSON.stringify(restoredSession));
-        } catch { }
       } else {
-        // Fallback to local session or syncly_user if valid in client context
-        const storedSession = typeof window !== 'undefined' ? localStorage.getItem('syncly_session') : null;
-        const storedUser = typeof window !== 'undefined' ? localStorage.getItem('syncly_user') : null;
-        const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('active_tenant_id') || '00000000-0000-0000-0000-000000000001') : '00000000-0000-0000-0000-000000000001';
-
-        if (storedSession) {
-          try {
-            const parsed = JSON.parse(storedSession);
-            if (parsed?.user?.id && parsed?.user?.email) {
-              setSession(parsed);
-              const resolvedTenant = parsed.user.tenantId || activeTenantId;
-              setProfile({
-                id: parsed.user.id,
-                tenant_id: resolvedTenant,
-                full_name: parsed.user.fullName || 'Demo Member',
-                role: parsed.user.role || 'employee',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as any);
-              setActiveTenantState({
-                id: resolvedTenant,
-                name: 'Acme Corporation',
-                slug: 'acme-corp',
-                created_at: new Date().toISOString(),
-              });
-            } else {
-              setSession(null);
-            }
-          } catch {
-            setSession(null);
-          }
-        } else if (storedUser) {
-          try {
-            const user = JSON.parse(storedUser);
-            if (user?.id && user?.email) {
-              const resolvedTenant = user.tenant_id || activeTenantId;
-              const demoSession: UserSession = {
-                user: {
-                  id: user.id,
-                  email: user.email,
-                  fullName: user.full_name || 'Demo Member',
-                  headline: 'Corporate Team Member',
-                  role: user.role || 'employee',
-                  tenantId: resolvedTenant,
-                  hasCompletedOnboarding: true,
-                },
-                token: 'demo-access-token',
-              };
-              setSession(demoSession);
-              setProfile({
-                id: user.id,
-                tenant_id: resolvedTenant,
-                full_name: user.full_name || 'Demo Member',
-                role: user.role || 'employee',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              } as any);
-              setActiveTenantState({
-                id: resolvedTenant,
-                name: 'Acme Corporation',
-                slug: 'acme-corp',
-                created_at: new Date().toISOString(),
-              });
-            } else {
-              setSession(null);
-            }
-          } catch {
-            setSession(null);
-          }
-        } else {
-          setSession(null);
-        }
+        // Unauthenticated - clean state completely
+        setSession(null);
+        setProfile(null);
+        setActiveTenantState(null);
       }
     } catch {
       setSession(null);
+      setProfile(null);
+      setActiveTenantState(null);
     } finally {
       setIsLoading(false);
     }
@@ -189,8 +135,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (parsed?.id) {
             setActiveTenantState({
               id: parsed.id,
-              name: parsed.name || 'Acme Corporation',
-              slug: parsed.slug || 'acme-corp',
+              name: parsed.name || 'Workspace',
+              slug: parsed.slug || 'workspace',
               created_at: new Date().toISOString(),
             });
             if (session) {
@@ -234,14 +180,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           token: newSession.access_token,
         };
         setSession(formatted);
-        try {
-          localStorage.setItem('syncly_session', JSON.stringify(formatted));
-        } catch { }
       } else {
         setSession(null);
-        try {
-          localStorage.removeItem('syncly_session');
-        } catch { }
+        setProfile(null);
+        setActiveTenantState(null);
       }
       setIsLoading(false);
     });
@@ -249,7 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, [refreshSession]);
+  }, [refreshSession, fetchProfileAndTenant]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -260,6 +202,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('syncly_session');
       localStorage.removeItem('active_community_id');
       localStorage.removeItem('x-tenant-id');
+      localStorage.removeItem('active_tenant_id');
+      localStorage.removeItem('syncly_workspace');
       if (typeof document !== 'undefined') {
         document.cookie = 'x-tenant-id=; path=/; max-age=0';
         document.cookie = 'active_tenant_id=; path=/; max-age=0';
@@ -278,7 +222,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       setSession(updated);
       try {
-        localStorage.setItem('syncly_session', JSON.stringify(updated));
         localStorage.setItem('x-tenant-id', tenant.id);
         if (typeof document !== 'undefined') {
           document.cookie = `x-tenant-id=${tenant.id}; path=/; max-age=2592000`;
@@ -298,6 +241,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut,
         refreshSession,
         setActiveTenant,
+        refreshProfile,
       }}
     >
       {children}
@@ -311,14 +255,11 @@ export function useUser() {
     throw new Error('useUser must be used within an AuthProvider');
   }
   return {
-    user: context.session?.user || null,
+    user: context.session?.user ? { id: context.session.user.id, email: context.session.user.email, role: context.session.user.role } : null,
     profile: context.profile,
-    isAuthenticated: context.isAuthenticated,
-    isLoading: context.isLoading,
     loading: context.isLoading,
+    refreshProfile: context.refreshProfile,
     signOut: context.signOut,
-    refreshSession: context.refreshSession,
-    refreshProfile: context.refreshSession,
   };
 }
 
@@ -329,8 +270,8 @@ export function useTenant() {
   }
   return {
     activeTenant: context.activeTenant,
-    tenantId: context.session?.user?.tenantId || null,
     setActiveTenant: context.setActiveTenant,
+    isLoading: context.isLoading,
   };
 }
 
@@ -340,14 +281,17 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return {
-    user: context.session?.user || null,
-    profile: context.profile,
     session: context.session,
+    profile: context.profile,
+    activeTenant: context.activeTenant,
+    user: context.session?.user ? { id: context.session.user.id, email: context.session.user.email, role: context.session.user.role } : null,
     isAuthenticated: context.isAuthenticated,
-    isLoading: context.isLoading,
+    loading: context.isLoading,
     signOut: context.signOut,
     refreshSession: context.refreshSession,
+    refreshProfile: context.refreshProfile,
     setActiveTenant: context.setActiveTenant,
-    activeTenant: context.activeTenant,
   };
 }
+
+export default AuthContext;
