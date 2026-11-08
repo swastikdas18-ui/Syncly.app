@@ -129,7 +129,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .select('*', { count: 'exact', head: true })
       .eq('post_id', postId);
 
-    const safeCount = Math.max(0, durableCount ?? (hasLiked ? (post.likes_count || 0) + 1 : Math.max(0, (post.likes_count || 1) - 1)));
+    const safeCount = Math.max(0, durableCount ?? 0);
 
     await (adminClient.from('posts') as any)
       .update({ likes_count: safeCount })
@@ -142,42 +142,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
     });
   }
 
-  // 5. Pre-migration database fallback: update posts.likes_count atomically
-  const currentCount = post.likes_count || 0;
-  let nextCount = currentCount;
-  let hasLiked = false;
-
-  if (desiredAction === 'like') {
-    nextCount = currentCount + 1;
-    hasLiked = true;
-  } else if (desiredAction === 'unlike') {
-    nextCount = Math.max(0, currentCount - 1);
-    hasLiked = false;
-  } else {
-    // toggle mode
-    if (currentCount > 0) {
-      nextCount = currentCount - 1;
-      hasLiked = false;
-    } else {
-      nextCount = currentCount + 1;
-      hasLiked = true;
-    }
-  }
-
-  try {
-    const adminClient = createAdminClient();
-    await (adminClient.from('posts') as any)
-      .update({ likes_count: nextCount })
-      .eq('id', postId);
-  } catch {
-    await (supabase.from('posts') as any)
-      .update({ likes_count: nextCount })
-      .eq('id', postId);
-  }
-
-  return NextResponse.json({
-    success: true,
-    likesCount: nextCount,
-    hasLiked,
+  // 5. Fail closed if durable reaction storage is unavailable (Migration 019 missing)
+  console.error('[Reactions] Durable reaction schema unavailable (Migration 019 required):', {
+    code: reactionQueryErr?.code,
+    message: reactionQueryErr?.message,
   });
+
+  return NextResponse.json(
+    {
+      error: 'Durable reaction service is unavailable. Database migration 019 (post_reactions table and toggle_post_reaction RPC) must be applied to ensure data integrity.',
+      code: 'REACTIONS_UNAVAILABLE',
+    },
+    { status: 503 }
+  );
 }

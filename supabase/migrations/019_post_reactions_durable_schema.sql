@@ -36,7 +36,8 @@ CREATE POLICY "post_reactions_select_member" ON public.post_reactions
     FOR SELECT
     TO authenticated
     USING (
-        tenant_id IN (
+        public.is_tenant_member(tenant_id)
+        OR tenant_id IN (
             SELECT community_id FROM public.memberships
             WHERE user_id = auth.uid()
         )
@@ -49,9 +50,12 @@ CREATE POLICY "post_reactions_insert_self" ON public.post_reactions
     TO authenticated
     WITH CHECK (
         user_id = auth.uid()
-        AND tenant_id IN (
-            SELECT community_id FROM public.memberships
-            WHERE user_id = auth.uid()
+        AND (
+            public.is_tenant_member(tenant_id)
+            OR tenant_id IN (
+                SELECT community_id FROM public.memberships
+                WHERE user_id = auth.uid()
+            )
         )
     );
 
@@ -62,9 +66,12 @@ CREATE POLICY "post_reactions_delete_self" ON public.post_reactions
     TO authenticated
     USING (
         user_id = auth.uid()
-        AND tenant_id IN (
-            SELECT community_id FROM public.memberships
-            WHERE user_id = auth.uid()
+        AND (
+            public.is_tenant_member(tenant_id)
+            OR tenant_id IN (
+                SELECT community_id FROM public.memberships
+                WHERE user_id = auth.uid()
+            )
         )
     );
 

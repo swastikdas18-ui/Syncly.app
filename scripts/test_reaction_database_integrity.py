@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """
-SYNCLY CYCLE 6.5: REACTION DATABASE INTEGRITY & ADVERSARIAL TEST SUITE
+SYNCLY CYCLE 6.5.1: REACTION DATABASE INTEGRITY & ADVERSARIAL TEST SUITE
 Comprehensive verification of Migration 019, post_reactions schema,
 durable persistence, concurrency safety, and tenant isolation.
+
+TEST CLASSIFICATION SYSTEM:
+- STATIC_CODE_ASSERTION: AST and literal verification of migrations and route implementations.
+- SIMULATED_CONCURRENCY_TEST: In-memory simulation of state machine, row locking, and constraints.
+- LIVE_DATABASE_TEST: Direct SQL/REST execution against staging Supabase (Reported as NOT VERIFIED
+  prior to authorized operator execution of Migration 019).
+- LIVE_BROWSER_TEST: Playwright end-to-end browser sessions.
 """
 
 import os
@@ -28,11 +35,12 @@ def check(test_id, category, description, passed, details=""):
 
 def run_tests():
     print("=" * 80)
-    print("SYNCLY CYCLE 6.5: REACTION DATABASE INTEGRITY TEST SUITE")
+    print("SYNCLY CYCLE 6.5.1: REACTION DATABASE INTEGRITY TEST SUITE")
     print("=" * 80)
 
     # --------------------------------------------------------------------------
     # PART 1: Static Source Verification of Migration 019
+    # Classification: STATIC_CODE_ASSERTION
     # --------------------------------------------------------------------------
     mig19_path = "supabase/migrations/019_post_reactions_durable_schema.sql"
     rollback19_path = "supabase/migrations/rollback_019_post_reactions_durable_schema.sql"
@@ -45,7 +53,7 @@ def run_tests():
 
     check(
         "SQL-019-01",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Migration 019 creates public.post_reactions with required columns",
         "CREATE TABLE IF NOT EXISTS public.post_reactions" in mig19_sql and
         "id UUID PRIMARY KEY" in mig19_sql and
@@ -58,7 +66,7 @@ def run_tests():
 
     check(
         "SQL-019-02",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Migration 019 enforces UNIQUE constraint on (post_id, user_id)",
         "CONSTRAINT uq_post_reactions_post_user UNIQUE (post_id, user_id)" in mig19_sql,
         "Guarantees impossible duplicate reaction records at the PostgreSQL engine level"
@@ -66,7 +74,7 @@ def run_tests():
 
     check(
         "SQL-019-03",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Migration 019 creates indexes for post_id, user_id, tenant_id",
         "idx_post_reactions_post_id" in mig19_sql and
         "idx_post_reactions_user_id" in mig19_sql and
@@ -76,7 +84,7 @@ def run_tests():
 
     check(
         "SQL-019-04",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Migration 019 enables Row Level Security on post_reactions",
         "ALTER TABLE public.post_reactions ENABLE ROW LEVEL SECURITY;" in mig19_sql,
         "Strict database level security boundary"
@@ -84,7 +92,7 @@ def run_tests():
 
     check(
         "SQL-019-05",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Migration 019 defines tenant-isolated RLS SELECT policy",
         "CREATE POLICY \"post_reactions_select_member\"" in mig19_sql and
         "tenant_id IN (" in mig19_sql and
@@ -94,7 +102,7 @@ def run_tests():
 
     check(
         "SQL-019-06",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Migration 019 defines tenant-isolated RLS INSERT and DELETE policies",
         "CREATE POLICY \"post_reactions_insert_self\"" in mig19_sql and
         "user_id = auth.uid()" in mig19_sql and
@@ -104,7 +112,7 @@ def run_tests():
 
     check(
         "SQL-019-07",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Migration 019 creates atomic toggle_post_reaction RPC with SECURITY DEFINER",
         "CREATE OR REPLACE FUNCTION public.toggle_post_reaction" in mig19_sql and
         "SECURITY DEFINER" in mig19_sql and
@@ -114,7 +122,7 @@ def run_tests():
 
     check(
         "SQL-019-08",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "toggle_post_reaction locks post row with FOR UPDATE",
         "FOR UPDATE;" in mig19_sql,
         "Eliminates concurrent lost-update race conditions"
@@ -122,7 +130,7 @@ def run_tests():
 
     check(
         "SQL-019-09",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "toggle_post_reaction derives likes_count from COUNT(*) in post_reactions",
         "SELECT count(*)::INTEGER INTO v_new_count" in mig19_sql and
         "FROM public.post_reactions" in mig19_sql,
@@ -131,7 +139,7 @@ def run_tests():
 
     check(
         "SQL-019-10",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Rollback script cleanly drops toggle_post_reaction and public.post_reactions",
         "DROP FUNCTION IF EXISTS public.toggle_post_reaction" in rollback19_sql and
         "DROP TABLE IF EXISTS public.post_reactions CASCADE;" in rollback19_sql,
@@ -140,6 +148,7 @@ def run_tests():
 
     # --------------------------------------------------------------------------
     # PART 2: Static Source Verification of API Route Implementation
+    # Classification: STATIC_CODE_ASSERTION
     # --------------------------------------------------------------------------
     like_route_path = "app/api/posts/[postId]/like/route.ts"
     posts_route_path = "app/api/posts/route.ts"
@@ -152,7 +161,7 @@ def run_tests():
 
     check(
         "API-019-01",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "app/api/posts/[postId]/like/route.ts eliminates globalThis in-memory state",
         "__post_reactions" not in like_src and
         "globalReactions" not in like_src,
@@ -161,7 +170,7 @@ def run_tests():
 
     check(
         "API-019-02",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "app/api/posts/route.ts eliminates globalThis in-memory state",
         "__post_reactions" not in posts_src,
         "Feed list derives hasLiked from durable database records"
@@ -169,7 +178,7 @@ def run_tests():
 
     check(
         "API-019-03",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Like route enforces cryptographic authentication check",
         "if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId)" in like_src and
         "status: 401" in like_src,
@@ -178,7 +187,7 @@ def run_tests():
 
     check(
         "API-019-04",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Like route delegates execution to atomic RPC toggle_post_reaction",
         "toggle_post_reaction" in like_src,
         "Prefers database-level ACID RPC execution"
@@ -186,7 +195,7 @@ def run_tests():
 
     check(
         "API-019-05",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Like route validates caller membership in target post workspace",
         "from('memberships')" in like_src and
         "status: 403" in like_src,
@@ -195,14 +204,24 @@ def run_tests():
 
     check(
         "API-019-06",
-        "STATIC_SOURCE_ASSERTION",
+        "STATIC_CODE_ASSERTION",
         "Like route derives userId strictly from authenticated token",
         "const userId = auth.userId;" in like_src,
         "Client-supplied user IDs in payload are completely ignored"
     )
 
+    check(
+        "API-019-07",
+        "STATIC_CODE_ASSERTION",
+        "Like route fails closed with HTTP 503 REACTIONS_UNAVAILABLE if Migration 019 is missing",
+        "REACTIONS_UNAVAILABLE" in like_src and "status: 503" in like_src,
+        "Zero silent in-memory fallback or independent counter drift when table missing"
+    )
+
     # --------------------------------------------------------------------------
     # PART 3: 10 Required Adversarial Unit & Concurrency Tests
+    # Classification: SIMULATED_CONCURRENCY_TEST
+    # (Simulated contract validation; distinct from live PostgreSQL database execution)
     # --------------------------------------------------------------------------
     class MockDurableDatabase:
         def __init__(self):
@@ -295,7 +314,7 @@ def run_tests():
     res1_unlike = db.toggle_reaction(None, "tenant-acme", "post-acme-1", action="unlike")
     check(
         "ADV-RCT-01",
-        "ADVERSARIAL_TEST",
+        "SIMULATED_CONCURRENCY_TEST",
         "Unauthenticated like and unlike requests are rejected with HTTP 401",
         res1_like["status"] == 401 and res1_unlike["status"] == 401,
         "Fails closed on anonymous callers"
@@ -305,7 +324,7 @@ def run_tests():
     res2 = db.toggle_reaction("user-devon", "tenant-globex", "post-acme-1", action="like")
     check(
         "ADV-RCT-02",
-        "ADVERSARIAL_TEST",
+        "SIMULATED_CONCURRENCY_TEST",
         "User attempting to like a post in another tenant is rejected (Cross-Tenant Boundary)",
         res2["status"] in (403, 404),
         "Devon in Globex cannot react to post in Acme"
@@ -318,7 +337,7 @@ def run_tests():
     marcus_reacted = ("post-acme-1", "user-marcus") in db.post_reactions
     check(
         "ADV-RCT-03",
-        "ADVERSARIAL_TEST",
+        "SIMULATED_CONCURRENCY_TEST",
         "Caller submitting another user's identity cannot react on their behalf",
         elena_reacted and not marcus_reacted,
         "Identity bound to auth.userId; spoofing ignored"
@@ -331,22 +350,19 @@ def run_tests():
     elena_count = sum(1 for (p, u) in db.post_reactions.keys() if p == "post-acme-1" and u == "user-elena")
     check(
         "ADV-RCT-04",
-        "ADVERSARIAL_TEST",
+        "SIMULATED_CONCURRENCY_TEST",
         "Repeated like requests are idempotent and do not create duplicate reactions",
         r4_3["likesCount"] == 1 and elena_count == 1,
         "Count remains 1 and exactly 1 record exists in table"
     )
 
     # Adversarial Test 5: Repeated unlike requests (Idempotency and Non-Negative Count)
-    # First unlike
     u5_1 = db.toggle_reaction("user-elena", "tenant-acme", "post-acme-1", action="unlike")
-    # Second unlike
     u5_2 = db.toggle_reaction("user-elena", "tenant-acme", "post-acme-1", action="unlike")
-    # Third unlike
     u5_3 = db.toggle_reaction("user-elena", "tenant-acme", "post-acme-1", action="unlike")
     check(
         "ADV-RCT-05",
-        "ADVERSARIAL_TEST",
+        "SIMULATED_CONCURRENCY_TEST",
         "Repeated unlike requests are idempotent and never produce negative counts",
         u5_3["likesCount"] == 0 and ("post-acme-1", "user-elena") not in db.post_reactions,
         "Count cleanly stays 0 without negative drift"
@@ -360,7 +376,7 @@ def run_tests():
     elena_records = sum(1 for (p, u) in db.post_reactions.keys() if p == "post-acme-1" and u == "user-elena")
     check(
         "ADV-RCT-06",
-        "ADVERSARIAL_TEST",
+        "SIMULATED_CONCURRENCY_TEST",
         "Two simultaneous like requests from same user resolve safely via unique constraint",
         sim_res1["likesCount"] == 1 and sim_res2["likesCount"] == 1 and elena_records == 1,
         "Unique constraint uq_post_reactions_post_user prevents double insertion"
@@ -371,7 +387,7 @@ def run_tests():
     total_records = sum(1 for (p, u) in db.post_reactions.keys() if p == "post-acme-1")
     check(
         "ADV-RCT-07",
-        "ADVERSARIAL_TEST",
+        "SIMULATED_CONCURRENCY_TEST",
         "Simultaneous likes from two different users create distinct records and accurate sum",
         res7_marcus["likesCount"] == 2 and total_records == 2,
         "Elena and Marcus both recorded; count = 2"
@@ -383,7 +399,7 @@ def run_tests():
     globex_records = sum(1 for (p, u) in db.post_reactions.keys() if p == "post-globex-1")
     check(
         "ADV-RCT-08",
-        "ADVERSARIAL_TEST",
+        "SIMULATED_CONCURRENCY_TEST",
         "Like followed by unlike cleanly deletes durable record and restores count to zero",
         l8["likesCount"] == 1 and u8["likesCount"] == 0 and globex_records == 0,
         "State transitions cleanly: 0 -> 1 -> 0"
@@ -396,7 +412,7 @@ def run_tests():
     globex_after_fail = db.posts["post-globex-1"]["likes_count"]
     check(
         "ADV-RCT-09",
-        "ADVERSARIAL_TEST",
+        "SIMULATED_CONCURRENCY_TEST",
         "Database failure during mutation fails closed and preserves uncorrupted count",
         f9["status"] == 500 and globex_after_fail == 0,
         "Transaction abort leaves count unaffected"
@@ -412,12 +428,11 @@ def run_tests():
         db.toggle_reaction("user-elena", "tenant-acme", "post-acme-1", action="like" if i % 2 == 0 else "unlike")
         db.toggle_reaction("user-marcus", "tenant-acme", "post-acme-1", action="toggle")
 
-    # Elena is unlike (i=9 odd), Marcus toggle 10 times (even -> 0)
     actual_rows = sum(1 for (p, u) in db.post_reactions.keys() if p == "post-acme-1")
     reported_count = db.posts["post-acme-1"]["likes_count"]
     check(
         "ADV-RCT-10",
-        "ADVERSARIAL_TEST",
+        "SIMULATED_CONCURRENCY_TEST",
         "Count consistency guaranteed after interleaved sequence of operations",
         actual_rows == reported_count and reported_count >= 0,
         f"Durable table count ({actual_rows}) exactly matches posts.likes_count ({reported_count})"
