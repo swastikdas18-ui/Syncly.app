@@ -56,6 +56,16 @@ export default function FeedDashboardPage() {
     );
   };
 
+  const handlePostUpdated = (updatedPost: any) => {
+    setPosts((prev) =>
+      prev.map((p) => (p.id === updatedPost.id ? { ...p, ...updatedPost } : p))
+    );
+  };
+
+  const handlePostDeleted = (postId: string) => {
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+  };
+
   const tenantModel: any = {
     id: activeTenant?.id || '00000000-0000-0000-0000-000000000001',
     name: activeTenant?.name || 'Acme Corporation',
@@ -73,7 +83,10 @@ export default function FeedDashboardPage() {
         onPostCreated={handlePostCreated}
         onPostLiked={handlePostLiked}
         onCommentAdded={handleCommentAdded}
+        onPostUpdated={handlePostUpdated}
+        onPostDeleted={handlePostDeleted}
         userRole={profile?.role as any}
+        currentUserId={profile?.id}
         canCreatePost={profile?.role !== 'intern'}
       />
     </div>

@@ -283,6 +283,41 @@ class SynclyApiClient {
     }
   }
 
+  public async editPost(postId: string, payload: { title?: string; content?: string; category?: string }): Promise<{ success: boolean; post?: any; error?: string }> {
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: 'PATCH',
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        return { success: false, error: json.error || 'Failed to edit post' };
+      }
+      return { success: true, post: json.post };
+    } catch (e: any) {
+      console.error('API editPost error:', e);
+      return { success: false, error: e.message || 'Network error' };
+    }
+  }
+
+  public async deletePost(postId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        return { success: false, error: json.error || 'Failed to delete post' };
+      }
+      return { success: true };
+    } catch (e: any) {
+      console.error('API deletePost error:', e);
+      return { success: false, error: e.message || 'Network error' };
+    }
+  }
+
   public async toggleLikePost(postId: string): Promise<{ likesCount: number; hasLiked: boolean } | null> {
     try {
       const res = await fetch(`/api/posts/${postId}/like`, {

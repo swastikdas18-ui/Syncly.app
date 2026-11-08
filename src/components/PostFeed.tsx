@@ -12,7 +12,9 @@ import {
   Check, 
   Sparkles,
   AlertCircle,
-  Search
+  Search,
+  Edit3,
+  Trash2
 } from 'lucide-react';
 import { Post, PostCategory, Tenant, PostComment } from '../types.ts';
 import { api } from '../lib/api.ts';
@@ -23,7 +25,10 @@ interface PostFeedProps {
   onPostCreated: (post: Post) => void;
   onPostLiked: (postId: string, count: number, hasLiked: boolean) => void;
   onCommentAdded: (postId: string, comment: PostComment, count: number) => void;
+  onPostUpdated?: (post: Post) => void;
+  onPostDeleted?: (postId: string) => void;
   userRole?: string;
+  currentUserId?: string;
   canCreatePost?: boolean;
 }
 
@@ -42,7 +47,10 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   onPostCreated,
   onPostLiked,
   onCommentAdded,
+  onPostUpdated,
+  onPostDeleted,
   userRole,
+  currentUserId,
   canCreatePost,
 }) => {
   const canCreate = canCreatePost !== undefined ? canCreatePost : userRole !== 'intern';
@@ -56,6 +64,12 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Active edit state per post
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [isUpdatingPost, setIsUpdatingPost] = useState(false);
 
   // Active expanded comments accordion per post
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
@@ -135,6 +149,10 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     e.preventDefault();
     if (!content.trim() || isSubmitting) return;
 
+    if (activeTenant?.id) {
+      api.setTenantId(activeTenant.id);
+    }
+
     setIsSubmitting(true);
     const result = await api.createPost({
       title: title.trim(),
@@ -187,6 +205,37 @@ export const PostFeed: React.FC<PostFeedProps> = ({
       setExpandedComments((prev) => ({ ...prev, [postId]: true }));
     }
     setSubmittingComment((prev) => ({ ...prev, [postId]: false }));
+  };
+
+  const handleStartEdit = (post: Post) => {
+    setEditingPostId(post.id);
+    setEditTitle(post.title || '');
+    setEditContent(post.content || '');
+  };
+
+  const handleSaveEdit = async (postId: string) => {
+    if (!editContent.trim()) return;
+    setIsUpdatingPost(true);
+    const res = await api.editPost(postId, { title: editTitle.trim(), content: editContent.trim() });
+    setIsUpdatingPost(false);
+    if (res.success) {
+      const post = posts.find((p) => p.id === postId);
+      if (post) {
+        onPostUpdated?.({
+          ...post,
+          title: editTitle.trim(),
+          content: editContent.trim(),
+        });
+      }
+      setEditingPostId(null);
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    const res = await api.deletePost(postId);
+    if (res.success) {
+      onPostDeleted?.(postId);
+    }
   };
 
   const formatTimeAgo = (isoDate: string) => {
@@ -534,15 +583,81 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  {/* Post Actions: Edit & Delete */}
+                  <div className="flex items-center gap-1.5">
+                    {currentUserId && post.authorId === currentUserId && (
+                      <button
+                        type="button"
+                        onClick={() => handleStartEdit(post)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+                        title="Edit post"
+                        aria-label="Edit post"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Edit</span>
+                      </button>
+                    )}
+                    {currentUserId && (post.authorId === currentUserId || userRole === 'admin' || userRole === 'owner') && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePost(post.id)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
+                        title="Delete post"
+                        aria-label="Delete post"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Delete</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {/* Title & Body */}
-                <h2 className="text-base font-semibold text-zinc-100 mb-2 leading-snug">
-                  {post.title}
-                </h2>
-                <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-line mb-4">
-                  {post.content}
-                </p>
+                {/* Title & Body / Edit Mode */}
+                {editingPostId === post.id ? (
+                  <div className="mb-4 space-y-3 bg-zinc-950/50 p-3 rounded-xl border border-zinc-800">
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      placeholder="Post title"
+                      className="w-full px-3 py-1.5 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:border-indigo-500"
+                    />
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      rows={3}
+                      placeholder="Post content"
+                      className="w-full px-3 py-1.5 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:border-indigo-500 resize-none"
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingPostId(null)}
+                        className="px-3 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEdit(post.id)}
+                        disabled={isUpdatingPost || !editContent.trim()}
+                        className="px-3 py-1 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        {isUpdatingPost ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="text-base font-semibold text-zinc-100 mb-2 leading-snug">
+                      {post.title}
+                    </h2>
+                    <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-line mb-4">
+                      {post.content}
+                    </p>
+                  </>
+                )}
 
                 {/* Media Gallery Grid */}
                 {post.mediaUrls && post.mediaUrls.length > 0 && (

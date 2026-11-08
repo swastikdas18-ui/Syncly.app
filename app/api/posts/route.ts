@@ -125,6 +125,7 @@ export async function GET(request: NextRequest) {
       mediaUrls: p.media_urls || [],
       likesCount: p.likes_count || 0,
       commentsCount: comments.length,
+      hasLiked: ((globalThis as any).__post_reactions?.get(p.id) as Set<string> | undefined)?.has(auth.userId) ?? false,
       createdAt: p.created_at,
       comments,
     };

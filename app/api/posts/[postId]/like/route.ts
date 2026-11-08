@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 import { createClient } from '@/lib/supabase/server.ts';
+import { createAdminClient } from '@/lib/supabase/admin.ts';
 
 interface RouteContext {
   params: Promise<{ postId: string }>;
 }
+
+// User-level reaction tracking per post: Map<postId, Set<userId>>
+const globalReactions: Map<string, Set<string>> = ((globalThis as any).__post_reactions ??= new Map<string, Set<string>>());
 
 /**
  * POST /api/posts/[postId]/like
@@ -20,6 +24,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const { postId } = await context.params;
   const tenantId = auth.activeTenantId;
+  const userId = auth.userId;
 
   let body: any = {};
   try {
@@ -42,30 +47,55 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   const currentCount = post.likes_count || 0;
-  let newCount = currentCount;
-  let hasLiked = true;
+  let userLikes = globalReactions.get(postId);
+  if (!userLikes) {
+    userLikes = new Set<string>();
+    globalReactions.set(postId, userLikes);
+  }
 
-  if (desiredAction === 'unlike') {
-    newCount = Math.max(0, currentCount - 1);
-    hasLiked = false;
-  } else if (desiredAction === 'like') {
-    newCount = currentCount + 1;
+  const alreadyLiked = userLikes.has(userId);
+  let newCount = currentCount;
+  let hasLiked = false;
+
+  if (desiredAction === 'like') {
+    if (!alreadyLiked) {
+      userLikes.add(userId);
+      newCount = currentCount + 1;
+    } else {
+      newCount = currentCount;
+    }
     hasLiked = true;
+  } else if (desiredAction === 'unlike') {
+    if (alreadyLiked) {
+      userLikes.delete(userId);
+      newCount = Math.max(0, currentCount - 1);
+    } else {
+      newCount = Math.max(0, currentCount);
+    }
+    hasLiked = false;
   } else {
     // toggle mode
-    // if client passed hasLiked state
-    if (body.hasLiked === true) {
+    if (alreadyLiked) {
+      userLikes.delete(userId);
       newCount = Math.max(0, currentCount - 1);
       hasLiked = false;
     } else {
+      userLikes.add(userId);
       newCount = currentCount + 1;
       hasLiked = true;
     }
   }
 
-  await (supabase.from('posts') as any)
-    .update({ likes_count: newCount })
-    .eq('id', postId);
+  try {
+    const adminClient = createAdminClient();
+    await (adminClient.from('posts') as any)
+      .update({ likes_count: newCount })
+      .eq('id', postId);
+  } catch {
+    await (supabase.from('posts') as any)
+      .update({ likes_count: newCount })
+      .eq('id', postId);
+  }
 
   return NextResponse.json({
     success: true,
