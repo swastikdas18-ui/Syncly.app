@@ -61,21 +61,7 @@ class SynclyApiClient {
       console.warn('API getTenants /api/tenant/members fallback:', e);
     }
 
-    return [
-      {
-        id: DEFAULT_TENANT_ID,
-        name: 'Acme Corporation',
-        slug: 'acme-corp',
-        tagline: 'Global Enterprise Systems & Operations',
-        memberCount: 142,
-        createdAt: '2026-01-15T00:00:00.000Z',
-        allowedDomains: ['acme.com', 'acmecorp.internal'],
-        isDiscoverable: true,
-        requiresApproval: false,
-        industry: 'Enterprise Software & Cloud Infrastructure',
-        ownerId: DEFAULT_TENANT_ID,
-      },
-    ];
+    return [];
   }
 
   // --- MEMBERSHIPS ---
@@ -363,24 +349,7 @@ class SynclyApiClient {
       console.warn('API getChannels network fallback:', e);
     }
 
-    return [
-      {
-        id: 'general',
-        tenantId: this.currentTenantId,
-        name: 'general',
-        description: 'Company-wide updates & general watercooler',
-        isPrivate: false,
-        createdAt: '2026-01-15T00:00:00.000Z',
-      },
-      {
-        id: 'announcements',
-        tenantId: this.currentTenantId,
-        name: 'announcements',
-        description: 'Executive broadcasts and corporate notices',
-        isPrivate: false,
-        createdAt: '2026-01-15T00:00:00.000Z',
-      },
-    ];
+    return [];
   }
 
   public async createChannel(payload: { id?: string; name: string; description?: string; isPrivate?: boolean }): Promise<Channel | null> {
