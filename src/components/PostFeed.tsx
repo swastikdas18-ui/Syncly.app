@@ -252,7 +252,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
     <div className="max-w-4xl mx-auto py-3 sm:py-8 px-2.5 sm:px-6">
       
       {/* HEADER BANNER FOR CURRENT TENANT */}
-      <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-slate-200">
+      <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-slate-700/80">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-1">
             Organization Updates
@@ -269,7 +269,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
           <button
             type="button"
             onClick={() => setIsComposerExpanded(!isComposerExpanded)}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors shrink-0 cursor-pointer"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 rounded-lg shadow-xs transition-colors shrink-0 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>New Company Update</span>
@@ -295,7 +295,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
               }
             }}
             aria-label="Search posts by title or content"
-            className="w-full pl-10 pr-10 sm:pr-24 py-2.5 text-sm bg-white border border-slate-200 rounded-xl shadow-xs focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-slate-900 placeholder-slate-400"
+            className="w-full pl-10 pr-10 sm:pr-24 py-2.5 text-sm bg-white border border-slate-700/80 rounded-xl shadow-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-100 bg-slate-950 focus:ring-2 focus:ring-blue-100 transition-all text-slate-900 placeholder-slate-400"
           />
           <div className="absolute right-3 flex items-center gap-1.5">
             {searchQuery ? (
@@ -305,14 +305,14 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                   setSearchQuery('');
                   searchInputRef.current?.focus();
                 }}
-                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
                 title="Clear search (Esc)"
                 aria-label="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             ) : (
-              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium text-slate-400 bg-slate-100 border border-slate-200 rounded">
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium text-slate-400 bg-slate-100 border border-slate-700/80 rounded">
                 /
               </kbd>
             )}
@@ -356,11 +356,11 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                   className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all min-h-[36px] sm:min-h-0 flex items-center gap-1.5 cursor-pointer touch-manipulation ${
                     isActive
                       ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25'
-                      : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                      : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
                   }`}
                 >
                   <span>{cat.label}</span>
-                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${isActive ? 'bg-indigo-700/80 text-white' : 'bg-zinc-800 text-zinc-400'}`}>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${isActive ? 'bg-indigo-700/80 text-white' : 'bg-slate-800 text-slate-400'}`}>
                     {count}
                   </span>
                 </button>
@@ -381,13 +381,13 @@ export const PostFeed: React.FC<PostFeedProps> = ({
 
       {/* COMPOSER DRAWER / CARD */}
       {isComposerExpanded && (
-        <form onSubmit={handleCreatePost} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-8">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-            <span className="text-sm font-semibold text-slate-800">Publish Company Announcement</span>
+        <form onSubmit={handleCreatePost} className="bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl p-5 mb-8 backdrop-blur-xl">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-4">
+            <span className="text-sm font-semibold text-slate-100">Publish Company Announcement</span>
             <button
               type="button"
               onClick={() => setIsComposerExpanded(false)}
-              className="text-slate-400 hover:text-slate-600"
+              className="text-slate-400 hover:text-slate-200"
             >
               <X className="w-4 h-4" />
             </button>
@@ -402,14 +402,14 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                   placeholder="Headline or Announcement Title..."
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 text-sm border border-slate-700/80 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-100 bg-slate-950"
                 />
               </div>
               <div>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value as PostCategory)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 text-sm border border-slate-700/80 rounded-lg bg-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-100 bg-slate-950"
                 >
                   <option value="announcement">Announcement</option>
                   <option value="general">General</option>
@@ -428,7 +428,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 required
-                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 resize-y"
+                className="w-full px-3 py-2.5 text-sm border border-slate-700/80 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-100 bg-slate-950 resize-y"
               />
             </div>
 
@@ -440,7 +440,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                 handleFiles(e.dataTransfer.files);
               }}
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/20 rounded-lg p-4 text-center cursor-pointer transition-colors"
+              className="border-2 border-dashed border-slate-700/80 hover:border-indigo-500/60 bg-slate-950/50 hover:bg-indigo-950/30 rounded-lg p-4 text-center cursor-pointer transition-colors"
             >
               <input
                 type="file"
@@ -472,7 +472,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             {mediaUrls.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
                 {mediaUrls.map((url, idx) => (
-                  <div key={idx} className="relative group rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100">
+                  <div key={idx} className="relative group rounded-lg overflow-hidden border border-slate-700/80 aspect-video bg-slate-100">
                     <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
                     <button
                       type="button"
@@ -502,7 +502,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting || !content.trim() || isUploading}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 disabled:opacity-50 rounded-lg transition-colors"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>{isSubmitting ? 'Posting...' : 'Publish'}</span>
@@ -515,15 +515,15 @@ export const PostFeed: React.FC<PostFeedProps> = ({
 
       {/* POSTS LIST */}
       {filteredPosts.length === 0 ? (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8 text-center space-y-4">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-8 text-center space-y-4">
           <div className="mx-auto w-12 h-12 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-400">
             <Sparkles className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-zinc-100">
+            <h3 className="text-base font-semibold text-slate-100">
               {searchQuery ? `No updates matching "${searchQuery}"` : 'No company updates yet'}
             </h3>
-            <p className="text-xs text-zinc-400 mt-1 max-w-md mx-auto">
+            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
               {searchQuery
                 ? 'Try checking for spelling or searching with broader keywords.'
                 : 'Check back soon or share the first update with your team!'}
@@ -558,26 +558,26 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             return (
               <article 
                 key={post.id} 
-                className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:p-5 mb-4 shadow-xs transition-colors hover:border-zinc-700/80"
+                className="rounded-2xl border border-slate-800/80 bg-slate-900/90 p-4 sm:p-5 mb-4 shadow-xs transition-colors hover:border-slate-700/80"
               >
                 {/* Post Header with unboxed metadata discipline */}
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-200 flex items-center justify-center text-xs font-bold shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 text-slate-200 flex items-center justify-center text-xs font-bold shrink-0">
                       {post.authorInitials || 'SY'}
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-sm font-semibold text-zinc-100">{post.authorName}</span>
-                        <span className="text-xs text-zinc-400">{post.authorRole}</span>
+                        <span className="text-sm font-semibold text-slate-100">{post.authorName}</span>
+                        <span className="text-xs text-slate-400">{post.authorRole}</span>
                       </div>
                       {/* Zero-Pill Unboxed Metadata with Typographic Separator */}
-                      <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-0.5">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
                         <span className="font-mono">{formatTimeAgo(post.createdAt)}</span>
                         <span>·</span>
-                        <span className="capitalize font-medium text-zinc-300">{post.category}</span>
+                        <span className="capitalize font-medium text-slate-300">{post.category}</span>
                         <span>·</span>
-                        <span className="font-mono text-[11px] text-zinc-500">
+                        <span className="font-mono text-[11px] text-slate-500">
                           tenant:{post.tenantId.slice(0, 8)}...
                         </span>
                       </div>
@@ -590,7 +590,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                       <button
                         type="button"
                         onClick={() => handleStartEdit(post)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                         title="Edit post"
                         aria-label="Edit post"
                       >
@@ -615,26 +615,26 @@ export const PostFeed: React.FC<PostFeedProps> = ({
 
                 {/* Title & Body / Edit Mode */}
                 {editingPostId === post.id ? (
-                  <div className="mb-4 space-y-3 bg-zinc-950/50 p-3 rounded-xl border border-zinc-800">
+                  <div className="mb-4 space-y-3 bg-slate-950/50 p-3 rounded-xl border border-slate-800">
                     <input
                       type="text"
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
                       placeholder="Post title"
-                      className="w-full px-3 py-1.5 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-1.5 text-sm bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-indigo-500"
                     />
                     <textarea
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
                       rows={3}
                       placeholder="Post content"
-                      className="w-full px-3 py-1.5 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:border-indigo-500 resize-none"
+                      className="w-full px-3 py-1.5 text-sm bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-indigo-500 resize-none"
                     />
                     <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => setEditingPostId(null)}
-                        className="px-3 py-1 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+                        className="px-3 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                       >
                         Cancel
                       </button>
@@ -650,10 +650,10 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                   </div>
                 ) : (
                   <>
-                    <h2 className="text-base font-semibold text-zinc-100 mb-2 leading-snug">
+                    <h2 className="text-base font-semibold text-slate-100 mb-2 leading-snug">
                       {post.title}
                     </h2>
-                    <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-line mb-4">
+                    <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line mb-4">
                       {post.content}
                     </p>
                   </>
@@ -661,7 +661,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
 
                 {/* Media Gallery Grid */}
                 {post.mediaUrls && post.mediaUrls.length > 0 && (
-                  <div className={`mb-4 rounded-xl overflow-hidden border border-zinc-800 grid gap-1.5 ${
+                  <div className={`mb-4 rounded-xl overflow-hidden border border-slate-800 grid gap-1.5 ${
                     post.mediaUrls.length === 1 
                       ? 'grid-cols-1' 
                       : post.mediaUrls.length === 2 
@@ -672,7 +672,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                       <div 
                         key={idx} 
                         onClick={() => setLightboxUrl(url)}
-                        className="relative cursor-pointer group aspect-video bg-zinc-900 rounded-xl overflow-hidden"
+                        className="relative cursor-pointer group aspect-video bg-slate-900 rounded-xl overflow-hidden"
                       >
                         <img 
                           src={url} 
@@ -686,13 +686,13 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                 )}
 
                 {/* Post Footer Actions */}
-                <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs text-slate-500">
+                <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs text-slate-400">
                   <div className="flex items-center gap-4">
                     <button
                       type="button"
                       onClick={() => handleToggleLike(post.id)}
                       className={`flex items-center gap-1.5 font-medium transition-colors ${
-                        post.hasLiked ? 'text-rose-600' : 'text-slate-600 hover:text-slate-900'
+                        post.hasLiked ? 'text-rose-600' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
                       <Heart className={`w-4 h-4 ${post.hasLiked ? 'fill-rose-600 text-rose-600' : ''}`} />
@@ -702,7 +702,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                     <button
                       type="button"
                       onClick={() => handleToggleComments(post.id)}
-                      className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 font-medium transition-colors"
+                      className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 font-medium transition-colors"
                     >
                       <MessageSquare className="w-4 h-4" />
                       <span className="font-mono tabular-nums">{post.commentsCount}</span>
@@ -715,7 +715,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                     onClick={() => {
                       navigator.clipboard.writeText(window.location.href);
                     }}
-                    className="flex items-center gap-1 text-slate-500 hover:text-slate-700"
+                    className="flex items-center gap-1 text-slate-400 hover:text-slate-200"
                   >
                     <Share2 className="w-3.5 h-3.5" />
                     <span>Share</span>
@@ -724,8 +724,8 @@ export const PostFeed: React.FC<PostFeedProps> = ({
 
                 {/* Expanded Threaded Comments */}
                 {isCommentsOpen && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
-                    <div className="text-xs font-semibold text-slate-700">
+                  <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
+                    <div className="text-xs font-semibold text-slate-300">
                       Threaded Discussion ({post.comments?.length || 0})
                     </div>
 
@@ -764,13 +764,13 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') handleAddComment(post.id);
                         }}
-                        className="flex-1 px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                        className="flex-1 px-3 py-1.5 text-xs border border-slate-700/80 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-100 bg-slate-950"
                       />
                       <button
                         type="button"
                         onClick={() => handleAddComment(post.id)}
                         disabled={submittingComment[post.id] || !commentInputs[post.id]?.trim()}
-                        className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors shrink-0"
+                        className="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 disabled:opacity-50 rounded-lg transition-colors shrink-0"
                       >
                         Reply
                       </button>

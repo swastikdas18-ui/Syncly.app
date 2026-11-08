@@ -145,7 +145,7 @@ export default function NewCommunityPage() {
       <div className="min-h-[50vh] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-          <p className="text-xs font-medium text-zinc-400">Verifying credentials...</p>
+          <p className="text-xs font-medium text-slate-400">Verifying credentials...</p>
         </div>
       </div>
     );
@@ -154,15 +154,15 @@ export default function NewCommunityPage() {
   if (successData) {
     return (
       <div className="w-full max-w-2xl mx-auto py-8">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8 text-center backdrop-blur-xl shadow-2xl">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-8 text-center backdrop-blur-xl shadow-2xl">
           <div className="w-14 h-14 rounded-full bg-emerald-500/10 text-emerald-400 mx-auto flex items-center justify-center mb-4 text-2xl">
             <CheckCircle2 className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-bold text-zinc-100">Workspace Created Successfully!</h2>
-          <p className="text-sm text-zinc-400 mt-2">
-            <strong className="text-zinc-200">{successData.name}</strong> (@{successData.slug}) is now active with PostgreSQL RLS tenant partition.
+          <h2 className="text-2xl font-bold text-slate-100">Workspace Created Successfully!</h2>
+          <p className="text-sm text-slate-400 mt-2">
+            <strong className="text-slate-200">{successData.name}</strong> (@{successData.slug}) is now active with PostgreSQL RLS tenant partition.
           </p>
-          <div className="mt-4 p-3 bg-zinc-950/80 rounded-xl border border-zinc-800/80 text-xs font-mono text-zinc-400 max-w-md mx-auto">
+          <div className="mt-4 p-3 bg-slate-950/80 rounded-xl border border-slate-800/80 text-xs font-mono text-slate-400 max-w-md mx-auto">
             Tenant ID: {successData.id}
           </div>
           <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -179,7 +179,7 @@ export default function NewCommunityPage() {
                 setSlug('');
                 setTagline('');
               }}
-              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-medium text-zinc-200 transition-colors cursor-pointer"
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-medium text-slate-200 transition-colors cursor-pointer"
             >
               Create Another
             </button>
@@ -192,20 +192,20 @@ export default function NewCommunityPage() {
   return (
     <div className="w-full max-w-3xl mx-auto py-4 sm:py-6">
       {/* Header Banner */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800 pb-5">
         <div>
           <Link
             href="/communities/explore"
-            className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors mb-2"
+            className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors mb-2"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to Explore
           </Link>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-100 flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100 flex items-center gap-2">
             <Building2 className="w-6 h-6 text-indigo-400" />
             Create Corporate Workspace
           </h1>
-          <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
             Establish a verified, isolated multi-tenant organization hub on Syncly.
           </p>
         </div>
@@ -220,15 +220,15 @@ export default function NewCommunityPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Step 1: Core Identity */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 sm:p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider flex items-center gap-2">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 sm:p-6 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs flex items-center justify-center font-bold">1</span>
             Organization Identity
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="workspace-name" className="block text-xs font-medium text-zinc-300 mb-1.5">
+              <label htmlFor="workspace-name" className="block text-xs font-medium text-slate-300 mb-1.5">
                 Workspace Name <span className="text-indigo-400">*</span>
               </label>
               <input
@@ -238,16 +238,16 @@ export default function NewCommunityPage() {
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="Acme Global Corporation"
-                className="w-full h-10 px-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                className="w-full h-10 px-3.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
               />
             </div>
 
             <div>
-              <label htmlFor="workspace-slug" className="block text-xs font-medium text-zinc-300 mb-1.5">
+              <label htmlFor="workspace-slug" className="block text-xs font-medium text-slate-300 mb-1.5">
                 Workspace Slug (@identifier)
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm font-mono">@</span>
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-mono">@</span>
                 <input
                   id="workspace-slug"
                   type="text"
@@ -258,14 +258,14 @@ export default function NewCommunityPage() {
                     setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
                   }}
                   placeholder="acme-corp"
-                  className="w-full h-10 pl-8 pr-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm text-zinc-100 font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  className="w-full h-10 pl-8 pr-3.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
                 />
               </div>
             </div>
           </div>
 
           <div>
-            <label htmlFor="workspace-tagline" className="block text-xs font-medium text-zinc-300 mb-1.5">
+            <label htmlFor="workspace-tagline" className="block text-xs font-medium text-slate-300 mb-1.5">
               Tagline / Mission Statement
             </label>
             <input
@@ -274,20 +274,20 @@ export default function NewCommunityPage() {
               value={tagline}
               onChange={(e) => setTagline(e.target.value)}
               placeholder="Enterprise platform engineering and autonomous systems"
-              className="w-full h-10 px-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+              className="w-full h-10 px-3.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="workspace-industry" className="block text-xs font-medium text-zinc-300 mb-1.5">
+              <label htmlFor="workspace-industry" className="block text-xs font-medium text-slate-300 mb-1.5">
                 Industry Preset
               </label>
               <select
                 id="workspace-industry"
                 value={industry}
                 onChange={(e) => setIndustry(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl bg-zinc-950 border border-zinc-800 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 transition-colors"
+                className="w-full h-10 px-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 transition-colors"
               >
                 {INDUSTRY_PRESETS.map((ind) => (
                   <option key={ind} value={ind}>{ind}</option>
@@ -296,7 +296,7 @@ export default function NewCommunityPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Brand Emblem Avatar
               </label>
               <div className="flex items-center gap-2">
@@ -318,31 +318,31 @@ export default function NewCommunityPage() {
         </div>
 
         {/* Step 2: Corporate Domain Allowlist */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 sm:p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider flex items-center gap-2">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 sm:p-6 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs flex items-center justify-center font-bold">2</span>
             Verified Domain Eligibility
           </h2>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-slate-400">
             Specify the corporate email domains authorized to self-enroll or request access to this workspace.
           </p>
 
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">@</span>
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm">@</span>
               <input
                 type="text"
                 value={domainInput}
                 onChange={(e) => setDomainInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddDomain(e)}
                 placeholder="acme.com"
-                className="w-full h-10 pl-8 pr-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm text-zinc-100 font-mono focus:outline-none focus:border-indigo-500 transition-colors"
+                className="w-full h-10 pl-8 pr-3.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500 transition-colors"
               />
             </div>
             <button
               type="button"
               onClick={handleAddDomain}
-              className="px-4 h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-4 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               Add Domain
@@ -370,38 +370,38 @@ export default function NewCommunityPage() {
         </div>
 
         {/* Step 3: Governance & Join Approval Policy */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 sm:p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider flex items-center gap-2">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 sm:p-6 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs flex items-center justify-center font-bold">3</span>
             Governance &amp; Access Controls
           </h2>
 
           <div className="space-y-3">
-            <label className="flex items-start gap-3 p-3.5 rounded-xl border border-zinc-800 bg-zinc-950 hover:bg-zinc-900/50 cursor-pointer transition-colors">
+            <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-900/50 cursor-pointer transition-colors">
               <input
                 type="checkbox"
                 checked={requiresApproval}
                 onChange={(e) => setRequiresApproval(e.target.checked)}
-                className="mt-0.5 rounded border-zinc-700 text-indigo-600 focus:ring-indigo-500"
+                className="mt-0.5 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500"
               />
               <div className="text-xs">
-                <span className="font-semibold text-zinc-200 block">Require Administrator Approval (Globex Pattern)</span>
-                <span className="text-zinc-400 mt-0.5 block">
+                <span className="font-semibold text-slate-200 block">Require Administrator Approval (Globex Pattern)</span>
+                <span className="text-slate-400 mt-0.5 block">
                   New applicants from verified domains are queued in a review holding state until approved by an administrator via the canonical atomic RPC.
                 </span>
               </div>
             </label>
 
-            <label className="flex items-start gap-3 p-3.5 rounded-xl border border-zinc-800 bg-zinc-950 hover:bg-zinc-900/50 cursor-pointer transition-colors">
+            <label className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-900/50 cursor-pointer transition-colors">
               <input
                 type="checkbox"
                 checked={isDiscoverable}
                 onChange={(e) => setIsDiscoverable(e.target.checked)}
-                className="mt-0.5 rounded border-zinc-700 text-indigo-600 focus:ring-indigo-500"
+                className="mt-0.5 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500"
               />
               <div className="text-xs">
-                <span className="font-semibold text-zinc-200 block">Public Organization Discovery</span>
-                <span className="text-zinc-400 mt-0.5 block">
+                <span className="font-semibold text-slate-200 block">Public Organization Discovery</span>
+                <span className="text-slate-400 mt-0.5 block">
                   Allow this workspace to be discovered on the public Explore Communities registry.
                 </span>
               </div>
@@ -413,7 +413,7 @@ export default function NewCommunityPage() {
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-end gap-3">
           <Link
             href="/communities/explore"
-            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 text-center transition-colors"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-300 text-center transition-colors"
           >
             Cancel
           </Link>

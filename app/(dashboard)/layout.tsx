@@ -111,7 +111,7 @@ export default function DashboardLayout({
     : null;
 
   return (
-    <div className="flex flex-col min-h-dvh w-full max-w-full overflow-x-hidden bg-zinc-950 text-zinc-100 font-sans">
+    <div className="flex flex-col min-h-dvh w-full max-w-full overflow-x-hidden bg-slate-950 text-slate-100 font-sans">
       <Header
         currentSession={sessionObj}
         onNavigate={(path) => router.push(path.startsWith('/') ? path : `/${path}`)}
@@ -119,7 +119,7 @@ export default function DashboardLayout({
         onOpenJoinRequests={() => setIsJoinRequestsModalOpen(true)}
         pendingRequestsCount={pendingRequestsCount}
       />
-      <main className="flex-1 w-full max-w-4xl mx-auto px-3.5 sm:px-6 pt-16 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:py-6 md:pb-6 min-w-0">
+      <main className="flex-1 w-full max-w-4xl mx-auto px-3.5 sm:px-6 pt-20 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:py-8 md:pt-20 md:pb-8 min-w-0">
         {children}
       </main>
       <BottomNav

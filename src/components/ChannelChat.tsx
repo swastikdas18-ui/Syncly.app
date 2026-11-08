@@ -311,7 +311,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
         return (
           <span 
             key={i} 
-            className="inline-flex items-center font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.2 rounded text-[11px] transition-colors"
+            className="inline-flex items-center font-semibold text-indigo-400 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.2 rounded text-[11px] transition-colors"
           >
             {part}
           </span>
@@ -324,9 +324,9 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
   const onlineCount = presenceUsers.filter((u) => u.status === 'online').length;
 
   const renderSidebarContent = (isMobileDrawer = false) => (
-    <div className="flex flex-col h-full bg-slate-50/80">
+    <div className="flex flex-col h-full bg-slate-950/80">
       {/* Workspace Title & Current User Presence Controller */}
-      <div className="p-3.5 border-b border-slate-200/80 bg-white shrink-0">
+      <div className="p-3.5 border-b border-slate-800/80 bg-slate-900 shrink-0">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
             Workspace
@@ -335,7 +335,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
             {activeTenant?.id.slice(0, 8)}...
           </span>
         </div>
-        <div className="text-sm font-bold text-slate-900 truncate mb-2">
+        <div className="text-sm font-bold text-slate-100 truncate mb-2">
           {activeTenant?.name}
         </div>
 
@@ -344,7 +344,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
           <button
             type="button"
             onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 text-xs transition-colors cursor-pointer"
+            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-slate-950 hover:bg-slate-800 rounded-lg border border-slate-800 text-xs transition-colors cursor-pointer"
             title="Change your real-time presence status"
           >
             <div className="flex items-center gap-2 truncate">
@@ -354,7 +354,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                 myStatus === 'busy' ? 'bg-rose-500 ring-2 ring-rose-100' :
                 'bg-slate-300 ring-2 ring-slate-100'
               }`} />
-              <span className="font-semibold text-slate-700 capitalize">
+              <span className="font-semibold text-slate-200 capitalize">
                 Status: {myStatus}
               </span>
             </div>
@@ -367,7 +367,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                 className="fixed inset-0 z-40" 
                 onClick={() => setIsStatusDropdownOpen(false)} 
               />
-              <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50 text-xs">
+              <div className="absolute left-0 right-0 mt-1.5 bg-slate-900 rounded-lg shadow-lg border border-slate-800 py-1 z-50 text-xs">
                 {[
                   { key: 'online', label: 'Online', desc: 'Available for messages', color: 'bg-emerald-500' },
                   { key: 'away', label: 'Away', desc: 'Stepped away temporarily', color: 'bg-amber-500' },
@@ -378,18 +378,18 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                     key={opt.key}
                     type="button"
                     onClick={() => handleStatusChange(opt.key as any)}
-                    className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-50 transition-colors ${
-                      myStatus === opt.key ? 'bg-blue-50/50' : ''
+                    className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-950 transition-colors ${
+                      myStatus === opt.key ? 'bg-indigo-950/40' : ''
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <span className={`w-2.5 h-2.5 rounded-full ${opt.color}`} />
                       <div>
-                        <div className="font-semibold text-slate-900">{opt.label}</div>
+                        <div className="font-semibold text-slate-100">{opt.label}</div>
                         <div className="text-[10px] text-slate-400">{opt.desc}</div>
                       </div>
                     </div>
-                    {myStatus === opt.key && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    {myStatus === opt.key && <Check className="w-3.5 h-3.5 text-indigo-400" />}
                   </button>
                 ))}
               </div>
@@ -401,7 +401,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
       {/* CHANNELS SECTION */}
       <div className="flex-1 overflow-y-auto">
         <div className="px-3 pt-3 pb-1 flex items-center justify-between">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
             Channels ({channels.length})
           </span>
           <button
@@ -410,7 +410,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
               if (isMobileDrawer) setIsMobileSidebarOpen(false);
               setIsNewChannelModalOpen(true);
             }}
-            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded transition-colors cursor-pointer"
+            className="p-1 text-slate-400 hover:text-slate-300 hover:bg-slate-800/80 rounded transition-colors cursor-pointer"
             title="Create new channel"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -430,8 +430,8 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                 }}
                 className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between text-xs font-medium transition-colors cursor-pointer ${
                   isActive
-                    ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-slate-700 hover:bg-slate-200/60'
+                    ? 'bg-indigo-600 text-white shadow-xs shadow-indigo-600/30 font-semibold'
+                    : 'text-slate-200 hover:bg-slate-800/80'
                 }`}
               >
                 <div className="flex items-center gap-2 truncate">
@@ -448,10 +448,10 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
         </div>
 
         {/* TEAM PRESENCE (SUPABASE REALTIME) SECTION */}
-        <div className="mt-4 pt-3 border-t border-slate-200/80">
+        <div className="mt-4 pt-3 border-t border-slate-800/80">
           <div className="px-3 pb-1 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                 Team Members
               </span>
               <span className="text-[10px] font-mono font-medium text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100">
@@ -485,7 +485,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                     {/* Avatar with Status Ring */}
                     <div className="relative shrink-0">
                       <div className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center ${
-                        isCurrentUser ? 'bg-blue-600 text-white' : 'bg-slate-800 text-white'
+                        isCurrentUser ? 'bg-indigo-600 text-white shadow-xs shadow-indigo-600/30' : 'bg-slate-800 text-white'
                       }`}>
                         {user.initials}
                       </div>
@@ -502,11 +502,11 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                     {/* Name, Role & Activity */}
                     <div className="truncate">
                       <div className="flex items-center gap-1">
-                        <span className="text-xs font-semibold text-slate-900 truncate">
+                        <span className="text-xs font-semibold text-slate-100 truncate">
                           {user.fullName}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500 truncate flex items-center gap-1">
+                      <div className="text-[11px] text-slate-400 truncate flex items-center gap-1">
                         <span>{user.role}</span>
                         <span>·</span>
                         <span className={`capitalize font-mono text-[10px] ${
@@ -526,7 +526,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                   {/* Hover action to mention */}
                   <button
                     type="button"
-                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-blue-600 transition-opacity"
+                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-indigo-400 transition-opacity"
                     title={`Mention ${user.fullName}`}
                   >
                     <AtSign className="w-3.5 h-3.5" />
@@ -539,8 +539,8 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
       </div>
 
       {/* SIDEBAR FOOTER */}
-      <div className="p-3 border-t border-slate-200/80 bg-white shrink-0">
-        <div className="flex items-center justify-between text-[11px] text-slate-500">
+      <div className="p-3 border-t border-slate-800/80 bg-slate-900 shrink-0">
+        <div className="flex items-center justify-between text-[11px] text-slate-400">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="font-mono">Supabase Presence</span>
@@ -555,10 +555,10 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
 
   return (
     <div className="w-full h-full flex flex-col min-h-0">
-      <div className="bg-zinc-950 md:bg-white rounded-none sm:rounded-xl border-x-0 border-y sm:border border-zinc-800 md:border-slate-200 shadow-xs overflow-hidden flex flex-1 min-h-0 h-full">
+      <div className="bg-slate-950 md:bg-slate-900 rounded-none sm:rounded-xl border-x-0 border-y sm:border border-slate-800 md:border-slate-800 shadow-xs overflow-hidden flex flex-1 min-h-0 h-full">
         
         {/* DESKTOP SIDEBAR: CHANNELS & REALTIME PRESENCE */}
-        <div className="hidden md:flex w-64 lg:w-72 xl:w-80 border-r border-slate-200 bg-slate-50/70 flex-col shrink-0 transition-all">
+        <div className="hidden md:flex w-64 lg:w-72 xl:w-80 border-r border-slate-800 bg-slate-950/70 flex-col shrink-0 transition-all">
           {renderSidebarContent(false)}
         </div>
 
@@ -569,7 +569,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
               className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs transition-opacity" 
               onClick={() => setIsMobileSidebarOpen(false)} 
             />
-            <div className="relative w-4/5 max-w-xs bg-white h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
+            <div className="relative w-4/5 max-w-xs bg-slate-900 h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
               <div className="px-3.5 py-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
                 <span className="text-xs font-semibold tracking-wide">Channels &amp; Team Presence</span>
                 <button 
@@ -588,30 +588,30 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
         )}
 
         {/* RIGHT AREA: CHAT STREAM & INPUT */}
-        <div className="flex-1 flex flex-col bg-white min-w-0">
+        <div className="flex-1 flex flex-col bg-slate-900 min-w-0">
           
           {/* Channel Header */}
-          <div className="px-3 sm:px-6 py-3 border-b border-slate-200 flex items-center justify-between bg-white shrink-0 gap-2">
+          <div className="px-3 sm:px-6 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900 shrink-0 gap-2">
             <div className="flex items-center gap-2 truncate">
               {/* Mobile Channels Drawer Button */}
               <button
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(true)}
-                className="md:hidden flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer shrink-0"
+                className="md:hidden flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-slate-200 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer shrink-0"
                 title="View channels and team presence"
               >
-                <Users className="w-3.5 h-3.5 text-blue-600" />
+                <Users className="w-3.5 h-3.5 text-indigo-400" />
                 <span className="truncate max-w-[70px]">Channels</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               </button>
 
               {currentChannel?.isPrivate ? (
-                <Lock className="w-4 h-4 text-slate-600 shrink-0" />
+                <Lock className="w-4 h-4 text-slate-300 shrink-0" />
               ) : (
-                <Hash className="w-4 h-4 text-slate-600 shrink-0" />
+                <Hash className="w-4 h-4 text-slate-300 shrink-0" />
               )}
               <div className="min-w-0 truncate">
-                <span className="font-semibold text-slate-900 text-sm truncate">
+                <span className="font-semibold text-slate-100 text-sm truncate">
                   {currentChannel?.name || 'general'}
                 </span>
                 <span className="text-xs text-slate-400 ml-2 font-normal hidden lg:inline truncate">
@@ -620,7 +620,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-500 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-400 shrink-0">
               <div className="hidden sm:flex items-center gap-1.5 font-mono text-[11px]">
                 <Users className="w-3.5 h-3.5 text-slate-400" />
                 <span>{onlineCount} online</span>
@@ -639,8 +639,8 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
                 <Hash className="w-10 h-10 text-slate-300 mb-2" />
-                <h4 className="text-sm font-semibold text-slate-800">#{currentChannel?.name || 'general'}</h4>
-                <p className="text-xs text-slate-500 max-w-sm mt-1">
+                <h4 className="text-sm font-semibold text-slate-100">#{currentChannel?.name || 'general'}</h4>
+                <p className="text-xs text-slate-400 max-w-sm mt-1">
                   This is the start of the #{currentChannel?.name || 'general'} channel. Send a message to start the conversation.
                 </p>
               </div>
@@ -663,7 +663,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                     <div className="flex-1 max-w-2xl">
                       {!isSameAuthor && (
                         <div className="flex items-baseline gap-2 mb-0.5">
-                          <span className="text-xs font-semibold text-slate-900">{msg.userName}</span>
+                          <span className="text-xs font-semibold text-slate-100">{msg.userName}</span>
                           <span className="text-[11px] font-mono text-slate-400 tabular-nums">
                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
@@ -672,7 +672,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                           )}
                         </div>
                       )}
-                      <div className="text-xs text-slate-800 leading-relaxed break-words">
+                      <div className="text-xs text-slate-100 leading-relaxed break-words">
                         {renderMessageContent(msg.content)}
                       </div>
 
@@ -684,7 +684,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                               key={i} 
                               src={url} 
                               alt="Attachment" 
-                              className="max-h-48 rounded-lg border border-slate-200 object-cover" 
+                              className="max-h-48 rounded-lg border border-slate-800 object-cover" 
                             />
                           ))}
                         </div>
@@ -698,11 +698,11 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
           </div>
 
           {/* Sticky Message Composer */}
-          <div className="p-2.5 sm:p-4 border-t border-zinc-800/80 bg-zinc-900/60 backdrop-blur-lg pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-4">
+          <div className="p-2.5 sm:p-4 border-t border-slate-800/80 bg-slate-900/60 backdrop-blur-lg pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-4">
             {mediaAttachments.length > 0 && (
               <div className="flex items-center gap-2 mb-2">
                 {mediaAttachments.map((url, i) => (
-                  <div key={i} className="relative group w-12 h-12 rounded-lg overflow-hidden border border-zinc-700">
+                  <div key={i} className="relative group w-12 h-12 rounded-lg overflow-hidden border border-slate-700">
                     <img src={url} alt="Attached" className="w-full h-full object-cover" />
                     <button
                       type="button"
@@ -730,7 +730,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
                 title="Attach media to message"
-                className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer touch-manipulation shrink-0"
+                className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-slate-800 rounded-xl transition-colors cursor-pointer touch-manipulation shrink-0"
               >
                 <ImageIcon className="w-4 h-4" />
               </button>
@@ -739,8 +739,8 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
               <div className="relative flex-1 min-w-0">
                 {/* Floating Mention Dropdown */}
                 {isMentionOpen && (
-                  <div className="absolute bottom-full left-0 mb-2 w-[calc(100vw-3rem)] sm:w-80 max-w-sm bg-zinc-900 rounded-xl shadow-2xl border border-zinc-800 py-1.5 z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150">
-                    <div className="px-3 py-1.5 border-b border-zinc-800 flex items-center justify-between text-[11px] text-zinc-400 bg-zinc-950/70">
+                  <div className="absolute bottom-full left-0 mb-2 w-[calc(100vw-3rem)] sm:w-80 max-w-sm bg-slate-900 rounded-xl shadow-2xl border border-slate-800 py-1.5 z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <div className="px-3 py-1.5 border-b border-slate-800 flex items-center justify-between text-[11px] text-zinc-400 bg-slate-950/70">
                       <span className="font-semibold text-zinc-200 flex items-center gap-1">
                         <AtSign className="w-3 h-3 text-indigo-400" />
                         <span>Mention a Teammate</span>
@@ -769,12 +769,12 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                               onMouseEnter={() => setSelectedMentionIndex(idx)}
                               onClick={() => handleSelectMention(user)}
                               className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between text-xs transition-colors cursor-pointer touch-manipulation min-h-[44px] ${
-                                isSelected ? 'bg-indigo-950/60 text-indigo-200' : 'hover:bg-zinc-800 text-zinc-200'
+                                isSelected ? 'bg-indigo-950/60 text-indigo-200' : 'hover:bg-slate-800 text-zinc-200'
                               }`}
                             >
                               <div className="flex items-center gap-2 truncate">
                                 <div className="relative shrink-0">
-                                  <div className="w-6 h-6 rounded-full bg-zinc-800 text-zinc-200 flex items-center justify-center text-[10px] font-bold">
+                                  <div className="w-6 h-6 rounded-full bg-slate-800 text-zinc-200 flex items-center justify-center text-[10px] font-bold">
                                     {user.initials}
                                   </div>
                                   <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-1 ring-zinc-900 ${
@@ -804,7 +804,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                         })
                       )}
                     </div>
-                    <div className="px-3 py-1 bg-zinc-950 border-t border-zinc-800 text-[10px] text-zinc-500 flex items-center justify-between">
+                    <div className="px-3 py-1 bg-slate-950 border-t border-slate-800 text-[10px] text-zinc-500 flex items-center justify-between">
                       <span>Use ↑↓ to navigate</span>
                       <span>↵ or Tab to select</span>
                     </div>
@@ -818,7 +818,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                   value={inputContent}
                   onChange={handleInputChange}
                   onKeyDown={handleInputKeyDown}
-                  className="flex-1 w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="flex-1 w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
 
@@ -839,13 +839,13 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
       {/* New Channel Modal */}
       {isNewChannelModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 p-6 max-w-md w-full">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <h3 className="text-sm font-semibold text-slate-900">Create Channel in {activeTenant?.name}</h3>
+          <div className="bg-slate-900 rounded-xl shadow-xl border border-slate-800 p-6 max-w-md w-full">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+              <h3 className="text-sm font-semibold text-slate-100">Create Channel in {activeTenant?.name}</h3>
               <button
                 type="button"
                 onClick={() => setIsNewChannelModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-300"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -853,7 +853,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
 
             <form onSubmit={handleCreateChannel} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Channel Name</label>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Channel Name</label>
                 <div className="relative">
                   <span className="absolute left-3 top-2 text-slate-400 text-xs">#</span>
                   <input
@@ -862,19 +862,19 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                     placeholder="e.g. security-sync"
                     value={newChannelName}
                     onChange={(e) => setNewChannelName(e.target.value)}
-                    className="w-full pl-7 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                    className="w-full pl-7 pr-3 py-1.5 text-xs border border-slate-800 rounded-lg focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Description (Optional)</label>
+                <label className="block text-xs font-semibold text-slate-200 mb-1">Description (Optional)</label>
                 <input
                   type="text"
                   placeholder="What is this channel about?"
                   value={newChannelDesc}
                   onChange={(e) => setNewChannelDesc(e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-800 rounded-lg focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -884,18 +884,18 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                   id="private-chan"
                   checked={newChannelPrivate}
                   onChange={(e) => setNewChannelPrivate(e.target.checked)}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-slate-300 text-indigo-400 focus:ring-blue-500"
                 />
-                <label htmlFor="private-chan" className="text-xs text-slate-700">
+                <label htmlFor="private-chan" className="text-xs text-slate-200">
                   Make private (only invited members can view)
                 </label>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsNewChannelModalOpen(false)}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800"
+                  className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-slate-100"
                 >
                   Cancel
                 </button>
