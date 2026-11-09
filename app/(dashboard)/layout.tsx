@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useUser, useTenant } from '@/lib/context/AuthContext.tsx';
 import { Header } from '@/components/navigation/Header.tsx';
-import { BottomNav, BottomNavTab } from '@/components/navigation/BottomNav.tsx';
+import { Sidebar } from '@/components/navigation/Sidebar.tsx';
+import { BottomNav } from '@/components/navigation/BottomNav.tsx';
 import { CreateCommunityModal } from '@/src/components/CreateCommunityModal.tsx';
 import { JoinRequestsModal } from '@/src/components/JoinRequestsModal.tsx';
 import { api } from '@/src/lib/api.ts';
@@ -20,9 +21,30 @@ export default function DashboardLayout({
   const { user, profile, loading } = useUser();
   const { activeTenant } = useTenant();
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isJoinRequestsModalOpen, setIsJoinRequestsModalOpen] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+  // Restore sidebar collapse state from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('syncly_sidebar_collapsed');
+      if (saved !== null) {
+        setSidebarCollapsed(saved === 'true');
+      }
+    } catch {}
+  }, []);
+
+  const toggleSidebarCollapse = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('syncly_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Enforce session boundary - redirect to /login if unauthenticated
   useEffect(() => {
@@ -56,10 +78,10 @@ export default function DashboardLayout({
 
   if (loading) {
     return (
-      <div className="min-h-dvh bg-zinc-950 flex items-center justify-center">
+      <div className="min-h-dvh bg-slate-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
-          <p className="text-xs font-medium text-zinc-400">Verifying session...</p>
+          <p className="text-xs font-medium text-slate-400">Verifying session...</p>
         </div>
       </div>
     );
@@ -67,16 +89,6 @@ export default function DashboardLayout({
 
   if (!user) {
     return null;
-  }
-
-  // Derive current active tab from pathname
-  let currentTab: BottomNavTab = 'feed';
-  if (pathname?.startsWith('/events')) {
-    currentTab = 'events';
-  } else if (pathname?.startsWith('/channels') || pathname?.startsWith('/chat')) {
-    currentTab = 'chat';
-  } else if (pathname?.startsWith('/profile')) {
-    currentTab = 'profile';
   }
 
   const sessionObj: UserSession | null = profile
@@ -111,26 +123,40 @@ export default function DashboardLayout({
     : null;
 
   return (
-    <div className="flex flex-col min-h-dvh w-full max-w-full overflow-x-hidden bg-slate-950 text-slate-100 font-sans">
-      <Header
-        currentSession={sessionObj}
-        onNavigate={(path) => router.push(path.startsWith('/') ? path : `/${path}`)}
+    <div className="min-h-dvh w-full max-w-full bg-slate-950 text-slate-100 font-sans flex">
+      {/* Persistent Desktop Sidebar */}
+      <Sidebar
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapse}
+        pendingRequestsCount={pendingRequestsCount}
         onOpenCreateCommunity={() => setIsCreateModalOpen(true)}
         onOpenJoinRequests={() => setIsJoinRequestsModalOpen(true)}
-        pendingRequestsCount={pendingRequestsCount}
       />
-      <main className="flex-1 w-full max-w-4xl mx-auto px-3.5 sm:px-6 pt-20 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:py-8 md:pt-20 md:pb-8 min-w-0">
-        {children}
-      </main>
-      <BottomNav
-        currentTab={currentTab}
-        onTabChange={(tab) => {
-          if (tab === 'feed') router.push('/feed');
-          else if (tab === 'events') router.push('/events');
-          else if (tab === 'chat') router.push('/channels/general');
-          else if (tab === 'profile') router.push('/profile');
-        }}
-      />
+
+      {/* Main Container: dynamically padded based on sidebar width */}
+      <div 
+        className={`flex-1 flex flex-col min-h-dvh min-w-0 transition-all duration-300 w-full ${
+          sidebarCollapsed ? 'md:pl-18' : 'md:pl-64'
+        }`}
+      >
+        <Header
+          currentSession={sessionObj}
+          onNavigate={(path) => router.push(path.startsWith('/') ? path : `/${path}`)}
+          onOpenCreateCommunity={() => setIsCreateModalOpen(true)}
+          onOpenJoinRequests={() => setIsJoinRequestsModalOpen(true)}
+          pendingRequestsCount={pendingRequestsCount}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebarCollapse}
+        />
+
+        {/* Content Area with smooth responsive constraints and safe-areas */}
+        <main className="flex-1 w-full max-w-6xl mx-auto px-3 sm:px-6 pt-20 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:py-8 md:pt-22 md:pb-12 min-w-0">
+          {children}
+        </main>
+
+        {/* Responsive Mobile Bottom Navigation */}
+        <BottomNav />
+      </div>
 
       {/* Workspace Creation Modal */}
       {isCreateModalOpen && (

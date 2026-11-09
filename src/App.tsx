@@ -370,7 +370,9 @@ export function WorkConnectHub() {
   };
 
   const handleBottomNavChange = (tab: BottomNavTab) => {
-    setActiveView(tab);
+    if (tab === 'events' || tab === 'chat' || tab === 'profile' || tab === 'feed') {
+      setActiveView(tab);
+    }
   };
 
   if (!isMounted) {

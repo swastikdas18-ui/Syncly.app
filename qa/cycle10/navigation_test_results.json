@@ -1,0 +1,104 @@
+[
+  {
+    "module": "Feed",
+    "route": "/feed",
+    "screenshot": "qa/cycle10/screenshots/01_desktop_feed.png",
+    "status": "PASS"
+  },
+  {
+    "module": "Chat",
+    "route": "/channels/general",
+    "screenshot": "qa/cycle10/screenshots/02_desktop_chat.png",
+    "status": "PASS"
+  },
+  {
+    "module": "Members",
+    "route": "/members",
+    "screenshot": "qa/cycle10/screenshots/03_desktop_members.png",
+    "status": "PASS"
+  },
+  {
+    "module": "Communities",
+    "route": "/communities/explore",
+    "screenshot": "qa/cycle10/screenshots/04_desktop_communities.png",
+    "status": "PASS"
+  },
+  {
+    "module": "Events",
+    "route": "/events",
+    "screenshot": "qa/cycle10/screenshots/05_desktop_events.png",
+    "status": "PASS"
+  },
+  {
+    "module": "Notifications",
+    "route": "/notifications",
+    "screenshot": "qa/cycle10/screenshots/06_desktop_notifications.png",
+    "status": "PASS"
+  },
+  {
+    "module": "Search",
+    "route": "/search",
+    "screenshot": "qa/cycle10/screenshots/07_desktop_search.png",
+    "status": "PASS"
+  },
+  {
+    "module": "Profile",
+    "route": "/profile",
+    "screenshot": "qa/cycle10/screenshots/08_desktop_profile.png",
+    "status": "PASS"
+  },
+  {
+    "viewport": "320x568",
+    "label": "mobile_320x568",
+    "overflow": false,
+    "status": "PASS"
+  },
+  {
+    "viewport": "360x800",
+    "label": "mobile_360x800",
+    "overflow": false,
+    "status": "PASS"
+  },
+  {
+    "viewport": "390x844",
+    "label": "mobile_390x844",
+    "overflow": false,
+    "status": "PASS"
+  },
+  {
+    "viewport": "414x896",
+    "label": "mobile_414x896",
+    "overflow": false,
+    "status": "PASS"
+  },
+  {
+    "viewport": "768x1024",
+    "label": "tablet_768x1024",
+    "overflow": false,
+    "status": "PASS"
+  },
+  {
+    "viewport": "1024x768",
+    "label": "laptop_1024x768",
+    "overflow": false,
+    "status": "PASS"
+  },
+  {
+    "viewport": "1280x800",
+    "label": "desktop_1280x800",
+    "overflow": false,
+    "status": "PASS"
+  },
+  {
+    "viewport": "1440x900",
+    "label": "desktop_1440x900",
+    "overflow": false,
+    "status": "PASS"
+  },
+  {
+    "viewport": "1920x1080",
+    "label": "desktop_1920x1080",
+    "overflow": false,
+    "status": "PASS"
+  }
+]
