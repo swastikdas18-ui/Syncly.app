@@ -167,13 +167,12 @@ export function Header({
                           key={c.id}
                           type="button"
                           role="menuitem"
-                          onClick={() => {
-                            switchCommunity(c.id);
-                            document.cookie = `active_tenant_id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
-                            document.cookie = `active_community_id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
-                            document.cookie = `x-tenant-id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
+                          onClick={async () => {
                             setDropdownOpen(false);
-                            onNavigate?.('feed');
+                            const res = await switchCommunity(c.id);
+                            if (res.success) {
+                              onNavigate?.('feed');
+                            }
                           }}
                           className={`w-full text-left px-3.5 py-2.5 flex items-start justify-between hover:bg-slate-800/60 transition-colors cursor-pointer ${
                             isSelected ? 'bg-indigo-600/10' : ''

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTenant } from '@/lib/context/AuthContext.tsx';
 import { useWorkspace } from '@/lib/context/WorkspaceContext.tsx';
 import { api } from '@/src/lib/api.ts';
@@ -8,11 +8,15 @@ import {
   Users, 
   Search, 
   ShieldCheck, 
+  ShieldAlert,
+  AlertTriangle,
+  RefreshCw,
   Mail, 
   Building2, 
   Sparkles,
   Loader2,
-  Calendar
+  Calendar,
+  Lock
 } from 'lucide-react';
 
 interface MemberItem {
@@ -26,42 +30,59 @@ interface MemberItem {
   joinedAt?: string;
 }
 
+type RosterState = 'loading' | 'success' | 'forbidden' | 'unauthorized' | 'error';
+
 export default function MembersPage() {
   const { activeTenant } = useTenant();
   const { activeCommunity } = useWorkspace();
   const [members, setMembers] = useState<MemberItem[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [rosterState, setRosterState] = useState<RosterState>('loading');
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
   const currentWorkspaceId = activeTenant?.id || activeCommunity?.id || '';
   const tenantName = activeTenant?.name || activeCommunity?.name || 'Workspace';
 
-  useEffect(() => {
-    let isMounted = true;
+  const fetchMembers = useCallback(() => {
     if (!currentWorkspaceId) {
-      setIsLoading(false);
+      setRosterState('loading');
       return;
     }
 
-    setIsLoading(true);
+    setRosterState('loading');
+    setErrorMessage('');
+
     api.getWorkspaceMembers(currentWorkspaceId)
-      .then((data) => {
-        if (!isMounted) return;
-        setMembers(data || []);
+      .then((res) => {
+        if (res.status === 'success') {
+          setMembers(res.data || []);
+          setRosterState('success');
+        } else if (res.status === 'forbidden') {
+          setMembers([]);
+          setRosterState('forbidden');
+          setErrorMessage(res.error || 'You do not have permission to view members of this workspace.');
+        } else if (res.status === 'unauthorized') {
+          setMembers([]);
+          setRosterState('unauthorized');
+          setErrorMessage(res.error || 'Authentication required to view members.');
+        } else {
+          setMembers([]);
+          setRosterState('error');
+          setErrorMessage(res.error || 'Failed to load workspace members. Please try again.');
+        }
       })
       .catch((err) => {
         console.error('Failed to load members for workspace:', err);
-        if (isMounted) setMembers([]);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
+        setMembers([]);
+        setRosterState('error');
+        setErrorMessage(err?.message || 'Network error occurred while fetching members.');
       });
-
-    return () => {
-      isMounted = false;
-    };
   }, [currentWorkspaceId]);
+
+  useEffect(() => {
+    fetchMembers();
+  }, [fetchMembers]);
 
   const getRoleBadgeStyle = (role: string) => {
     const r = role.toLowerCase();
@@ -98,53 +119,111 @@ export default function MembersPage() {
             Active verified colleagues within <span className="text-slate-200 font-medium">{tenantName}</span>
           </p>
         </div>
+
+        {rosterState === 'error' && (
+          <button
+            type="button"
+            onClick={fetchMembers}
+            className="self-start sm:self-auto inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-colors cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry</span>
+          </button>
+        )}
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search colleagues by name or role..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder:text-slate-500 focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
-          />
+      {/* Filter and Search Bar (only shown when successful or loading) */}
+      {rosterState === 'success' && (
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search colleagues by name or role..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-900/90 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder:text-slate-500 focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1 rounded-xl shrink-0 overflow-x-auto">
+            {['all', 'admin', 'manager', 'member'].map((rf) => (
+              <button
+                key={rf}
+                type="button"
+                onClick={() => setRoleFilter(rf)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${
+                  roleFilter === rf
+                    ? 'bg-indigo-600 text-white font-semibold shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                {rf}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1 rounded-xl shrink-0 overflow-x-auto">
-          {['all', 'admin', 'manager', 'member'].map((rf) => (
-            <button
-              key={rf}
-              type="button"
-              onClick={() => setRoleFilter(rf)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer ${
-                roleFilter === rf
-                  ? 'bg-indigo-600 text-white font-semibold shadow-xs'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-              }`}
-            >
-              {rf}
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
-      {/* Member Cards Grid */}
-      {isLoading ? (
+      {/* Roster View Rendering */}
+      {rosterState === 'loading' ? (
         <div className="py-16 text-center border border-slate-800/80 rounded-2xl bg-slate-900/40 flex flex-col items-center justify-center gap-2">
           <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
           <p className="text-xs text-slate-400 font-medium">Loading workspace colleagues...</p>
         </div>
-      ) : filteredMembers.length === 0 ? (
-        <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl">
+      ) : rosterState === 'forbidden' ? (
+        <div className="p-12 text-center border border-amber-500/30 bg-amber-950/10 rounded-2xl">
+          <Lock className="w-8 h-8 text-amber-400 mx-auto mb-3" />
+          <h2 className="text-base font-semibold text-slate-200">Access Restricted</h2>
+          <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+            {errorMessage || 'You do not hold an active verified membership in this workspace.'}
+          </p>
+        </div>
+      ) : rosterState === 'unauthorized' ? (
+        <div className="p-12 text-center border border-slate-800 bg-slate-900/50 rounded-2xl">
+          <ShieldAlert className="w-8 h-8 text-rose-400 mx-auto mb-3" />
+          <h2 className="text-base font-semibold text-slate-200">Authentication Required</h2>
+          <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+            Please log in with a valid corporate session to access this workspace directory.
+          </p>
+        </div>
+      ) : rosterState === 'error' ? (
+        <div className="p-12 text-center border border-rose-500/30 bg-rose-950/10 rounded-2xl space-y-4">
+          <AlertTriangle className="w-8 h-8 text-rose-400 mx-auto mb-1" />
+          <div>
+            <h2 className="text-base font-semibold text-slate-200">Unable to Load Members</h2>
+            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+              {errorMessage || 'An error occurred while communicating with the server.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={fetchMembers}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition-colors cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Try Again</span>
+          </button>
+        </div>
+      ) : members.length === 0 ? (
+        /* Genuine Empty State: verified empty directory */
+        <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
           <Users className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-slate-300">No members found</p>
+          <h2 className="text-sm font-semibold text-slate-300">No Colleagues Yet</h2>
+          <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+            This workspace currently has no active enrolled team members.
+          </p>
+        </div>
+      ) : filteredMembers.length === 0 ? (
+        /* Filter/search mismatch empty state */
+        <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl">
+          <Search className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+          <h2 className="text-sm font-semibold text-slate-300">No Matching Results</h2>
           <p className="text-xs text-slate-500 mt-1">
-            {searchQuery ? 'No colleagues match your search query.' : `No members found in ${tenantName}.`}
+            No colleagues match your current search or filter criteria.
           </p>
         </div>
       ) : (
+        /* Successful roster grid */
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {filteredMembers.map((member) => (
             <div

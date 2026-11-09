@@ -215,13 +215,12 @@ export function Sidebar({
                       <button
                         key={c.id}
                         type="button"
-                        onClick={() => {
-                          switchCommunity(c.id);
-                          document.cookie = `active_tenant_id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
-                          document.cookie = `active_community_id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
-                          document.cookie = `x-tenant-id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
+                        onClick={async () => {
                           setWorkspaceMenuOpen(false);
-                          router.push('/feed');
+                          const res = await switchCommunity(c.id);
+                          if (res.success) {
+                            router.push('/feed');
+                          }
                         }}
                         className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer text-left ${
                           isSelected ? 'bg-indigo-600/15 text-indigo-300 font-semibold' : 'text-slate-300 hover:bg-slate-800/60'

@@ -72,9 +72,26 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (Object.keys(updatePayload).length > 0) {
-      await (supabase.from('profiles') as any)
+      const { error: updateError } = await (supabase.from('profiles') as any)
         .update(updatePayload)
         .eq('id', auth.userId);
+
+      if (updateError) {
+        // Redacted diagnostic logging: log code & message without leaking PII or credentials
+        console.error('[API /api/profile] Database update failure:', {
+          code: updateError.code,
+          message: updateError.message,
+          userId: auth.userId ? `${auth.userId.slice(0, 8)}...` : undefined
+        });
+
+        return NextResponse.json(
+          {
+            error: 'Database error occurred while updating profile.',
+            details: updateError.message
+          },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({
@@ -90,7 +107,10 @@ export async function PATCH(request: NextRequest) {
       message: 'Profile updated successfully. Role modifications are restricted to workspace administrators.',
       rlsContextSql: buildTenantSessionSql(auth.activeTenantId),
     });
-  } catch {
-    return NextResponse.json({ error: 'Malformed payload.' }, { status: 400 });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || 'Malformed payload.' },
+      { status: 400 }
+    );
   }
 }

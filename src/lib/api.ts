@@ -369,19 +369,60 @@ class SynclyApiClient {
   }
 
   // --- MEMBERSHIP & ROSTER ---
-  public async getWorkspaceMembers(tenantId?: string): Promise<any[]> {
+  public async getWorkspaceMembers(tenantId?: string): Promise<{
+    status: 'success' | 'unauthorized' | 'forbidden' | 'server_error' | 'network_error';
+    data: any[];
+    statusCode: number;
+    error?: string;
+  }> {
     try {
       const headers = this.getHeaders();
       if (tenantId) {
         (headers as Record<string, string>)['x-tenant-id'] = tenantId;
       }
       const res = await fetch('/api/tenant/members', { headers });
-      if (!res.ok) throw new Error('Failed to fetch workspace members');
-      const json = await res.json();
-      return json.data || [];
-    } catch (e) {
-      console.warn('API getWorkspaceMembers error:', e);
-      return [];
+      const json = await res.json().catch(() => ({}));
+
+      if (res.status === 200) {
+        return {
+          status: 'success',
+          data: Array.isArray(json.data) ? json.data : [],
+          statusCode: 200,
+        };
+      }
+
+      if (res.status === 401) {
+        return {
+          status: 'unauthorized',
+          data: [],
+          statusCode: 401,
+          error: json.error || 'Authentication required.',
+        };
+      }
+
+      if (res.status === 403) {
+        return {
+          status: 'forbidden',
+          data: [],
+          statusCode: 403,
+          error: json.error || 'You do not hold an active membership in this workspace.',
+        };
+      }
+
+      return {
+        status: 'server_error',
+        data: [],
+        statusCode: res.status,
+        error: json.error || `Server responded with HTTP ${res.status}`,
+      };
+    } catch (e: any) {
+      console.warn('API getWorkspaceMembers network error:', e);
+      return {
+        status: 'network_error',
+        data: [],
+        statusCode: 0,
+        error: e?.message || 'Network connection failed.',
+      };
     }
   }
 

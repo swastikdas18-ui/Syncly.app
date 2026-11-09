@@ -2,12 +2,22 @@ import time
 import os
 from playwright.sync_api import sync_playwright
 
-BASE_URL = "http://localhost:3000"
+BASE_URL = os.environ.get("TEST_APP_URL", "http://localhost:3000")
 QA_DIR = "qa/cycle10_2"
 
 os.makedirs(QA_DIR, exist_ok=True)
 
+ELENA_EMAIL = os.environ.get("TEST_PERSONA_ELENA_EMAIL")
+ELENA_PASSWORD = os.environ.get("TEST_PERSONA_ELENA_PASSWORD")
+DEVON_EMAIL = os.environ.get("TEST_PERSONA_DEVON_EMAIL")
+DEVON_PASSWORD = os.environ.get("TEST_PERSONA_DEVON_PASSWORD")
+
 def run_tests():
+    if not (ELENA_EMAIL and ELENA_PASSWORD and DEVON_EMAIL and DEVON_PASSWORD):
+        print("[WARNING] Test credentials for Elena and Devon are not provided in environment variables.")
+        print("Set TEST_PERSONA_ELENA_EMAIL, TEST_PERSONA_ELENA_PASSWORD, TEST_PERSONA_DEVON_EMAIL, TEST_PERSONA_DEVON_PASSWORD.")
+        return
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(viewport={"width": 1440, "height": 900})
@@ -27,8 +37,8 @@ def run_tests():
 
         print("[TEST] 3. Logging in as Elena Rostova (Acme Admin)...")
         page.goto(f"{BASE_URL}/login")
-        page.fill('input[type="email"]', 'elena.rostova@acmecorp.com')
-        page.fill('input[type="password"]', 'Password123!')
+        page.fill('input[type="email"]', ELENA_EMAIL)
+        page.fill('input[type="password"]', ELENA_PASSWORD)
         page.click('button[type="submit"]')
         page.wait_for_url("**/feed", timeout=15000)
         time.sleep(2)
@@ -54,7 +64,6 @@ def run_tests():
         page.screenshot(path=f"{QA_DIR}/05_elena_profile_role_badge.png")
         print("  Saved 05_elena_profile_role_badge.png")
 
-        # Now test Globex persona in a separate browser context
         context.close()
 
         context2 = browser.new_context(viewport={"width": 1440, "height": 900})
@@ -62,8 +71,8 @@ def run_tests():
 
         print("[TEST] 6. Logging in as Devon Thorne (Globex Admin)...")
         page2.goto(f"{BASE_URL}/login")
-        page2.fill('input[type="email"]', 'devon.thorne@globextech.com')
-        page2.fill('input[type="password"]', 'Password123!')
+        page2.fill('input[type="email"]', DEVON_EMAIL)
+        page2.fill('input[type="password"]', DEVON_PASSWORD)
         page2.click('button[type="submit"]')
         page2.wait_for_url("**/feed", timeout=15000)
         time.sleep(2)
@@ -91,4 +100,3 @@ def run_tests():
 
 if __name__ == "__main__":
     run_tests()
-
