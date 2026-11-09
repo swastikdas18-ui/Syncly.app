@@ -296,7 +296,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
               }
             }}
             aria-label="Search posts by title or content"
-            className="w-full pl-10 pr-10 sm:pr-24 py-2.5 text-sm bg-white border border-slate-700/80 rounded-xl shadow-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-100 bg-slate-950 focus:ring-2 focus:ring-blue-100 transition-all text-slate-900 placeholder-slate-400"
+            className="w-full pl-10 pr-10 sm:pr-24 py-2.5 text-sm bg-slate-900/90 border border-slate-800 rounded-xl shadow-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-100 placeholder:text-slate-500 transition-all"
           />
           <div className="absolute right-3 flex items-center gap-1.5">
             {searchQuery ? (
@@ -306,14 +306,14 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                   setSearchQuery('');
                   searchInputRef.current?.focus();
                 }}
-                className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-full transition-colors cursor-pointer"
                 title="Clear search (Esc)"
                 aria-label="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             ) : (
-              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium text-slate-400 bg-slate-100 border border-slate-700/80 rounded">
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-medium text-slate-400 bg-slate-800 border border-slate-700 rounded">
                 /
               </kbd>
             )}

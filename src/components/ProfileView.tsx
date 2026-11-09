@@ -418,33 +418,19 @@ export function ProfileView({
               </p>
             </div>
 
-            {/* ROLE SELECTOR */}
+            {/* ROLE (AUTHORITATIVE READ-ONLY DISPLAY) */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Workspace Role &amp; Permissions
+                Workspace Role & Permissions
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                {ROLE_OPTIONS.map((opt) => {
-                  const isSelected = role === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setRole(opt.id)}
-                      className={`p-2.5 rounded-xl border text-left transition-all ${
-                        isSelected
-                          ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-xs'
-                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold">{opt.label}</span>
-                        {isSelected && <Check className="w-3.5 h-3.5 text-indigo-400" />}
-                      </div>
-                      <p className="text-[10px] text-slate-400 line-clamp-2 mt-0.5">{opt.desc}</p>
-                    </button>
-                  );
-                })}
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs font-bold text-slate-200 capitalize">{user.role}</span>
+                </div>
+                <span className="text-[11px] text-slate-500 font-medium">
+                  Assigned by workspace administration
+                </span>
               </div>
             </div>
 
