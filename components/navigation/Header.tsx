@@ -5,14 +5,15 @@ import {
   Building2, 
   ChevronDown, 
   Check, 
-  Copy, 
   Search, 
   Plus, 
   Bell, 
   ShieldCheck, 
   User as UserIcon,
   Sparkles,
-  Command
+  Command,
+  PanelLeftClose,
+  PanelLeft
 } from 'lucide-react';
 import { Tenant, UserSession } from '@/src/types.ts';
 import { useWorkspace, JoinedCommunity } from '@/lib/context/WorkspaceContext.tsx';
@@ -23,6 +24,8 @@ interface HeaderProps {
   onOpenCreateCommunity?: () => void;
   onOpenJoinRequests?: () => void;
   pendingRequestsCount?: number;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export function Header({
@@ -31,24 +34,16 @@ export function Header({
   onOpenCreateCommunity,
   onOpenJoinRequests,
   pendingRequestsCount = 0,
+  sidebarCollapsed = false,
+  onToggleSidebar,
 }: HeaderProps) {
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const { joinedCommunities, activeCommunity, switchCommunity } = useWorkspace();
   const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
-  const [copiedTenantId, setCopiedTenantId] = useState<boolean>(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
-  const copyTenantId = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (activeCommunity?.id) {
-      navigator.clipboard.writeText(activeCommunity.id);
-      setCopiedTenantId(true);
-      setTimeout(() => setCopiedTenantId(false), 2000);
-    }
-  };
 
   const getRoleBadgeColor = (role?: string) => {
     switch (role?.toLowerCase()) {
@@ -68,17 +63,15 @@ export function Header({
   // SSR skeleton matching client initial layout
   if (!isMounted) {
     return (
-      <header className="fixed top-0 left-0 right-0 z-40 h-16 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 px-4 sm:px-6 flex items-center justify-between transition-colors">
-        <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
+      <header className="fixed top-0 left-0 right-0 z-30 h-16 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 px-4 sm:px-6 flex items-center justify-between transition-colors">
+        <div className="w-full flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex items-center gap-2.5 shrink-0">
-              <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-                S
-              </div>
-              <span className="font-bold text-slate-100 tracking-tight text-base">
-                Syncly
-              </span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+              S
             </div>
+            <span className="font-bold text-slate-100 tracking-tight text-base">
+              Syncly
+            </span>
           </div>
           <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 animate-pulse" />
         </div>
@@ -87,54 +80,66 @@ export function Header({
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 h-16 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 px-3.5 sm:px-6 flex items-center justify-between transition-colors">
-      <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
+    <header className="fixed top-0 right-0 z-30 h-16 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 px-3.5 sm:px-6 flex items-center justify-between transition-all left-0 md:left-64 data-[collapsed=true]:md:left-18" data-collapsed={sidebarCollapsed}>
+      <div className="w-full flex items-center justify-between gap-4">
         
-        {/* LEFT: BRAND & PERSISTENT WORKSPACE SWITCHER */}
+        {/* LEFT: WORKSPACE BRAND & SWITCHER */}
         <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-          {/* Logo */}
+          {/* Mobile brand (hidden on desktop since sidebar has brand) */}
           <button 
             type="button"
             onClick={() => onNavigate?.('feed')}
-            className="flex items-center gap-2.5 shrink-0 cursor-pointer group focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-xl"
+            className="md:hidden flex items-center gap-2.5 shrink-0 cursor-pointer group focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-xl"
             aria-label="Go to feed dashboard"
           >
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-indigo-600/20 group-hover:bg-indigo-500 transition-colors">
+            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
               S
             </div>
-            <span className="font-bold text-slate-100 tracking-tight text-base hidden xs:inline-block">
-              Syncly
-            </span>
           </button>
 
-          <div className="h-5 w-px bg-slate-800 hidden sm:block shrink-0" aria-hidden="true" />
+          {/* Desktop Sidebar Toggle in Top Bar */}
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="hidden md:flex p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent hover:border-slate-800 transition-colors cursor-pointer"
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {sidebarCollapsed ? (
+              <PanelLeft className="w-4 h-4" />
+            ) : (
+              <PanelLeftClose className="w-4 h-4" />
+            )}
+          </button>
 
-          {/* Persistent Workspace Switcher Dropdown */}
-          <div className="relative min-w-0">
+          {/* Workspace Switcher Dropdown */}
+          <div className="relative">
             <button
               type="button"
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              aria-haspopup="true"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-900 text-slate-200 border border-slate-800/90 hover:border-slate-700/80 transition-all text-xs font-semibold max-w-[200px] sm:max-w-xs truncate cursor-pointer group shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-400 min-h-[40px]"
               aria-expanded={dropdownOpen}
-              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-200 bg-slate-900/90 hover:bg-slate-800 rounded-xl border border-slate-800 shadow-xs transition-all hover:border-slate-700 max-w-[150px] sm:max-w-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-400 min-h-[40px] cursor-pointer"
-              title="Switch active workspace"
+              aria-haspopup="true"
+              aria-label="Switch active corporate workspace"
             >
-              <div className="w-5 h-5 rounded-lg bg-indigo-950 text-indigo-400 flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden">
-                {activeCommunity?.logoUrl ? (
-                  <img src={activeCommunity.logoUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <Building2 className="w-3.5 h-3.5 text-indigo-400" aria-hidden="true" />
-                )}
+              <div className="w-5 h-5 rounded-md bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                <Building2 className="w-3 h-3" aria-hidden="true" />
               </div>
-              <span className="font-semibold text-slate-100 max-w-[85px] sm:max-w-[140px] truncate">
-                {activeCommunity?.name || 'Workspace'}
+              
+              <span className="truncate max-w-[120px] sm:max-w-[150px]">
+                {activeCommunity?.name || 'Acme Corporation'}
               </span>
+
               {activeCommunity?.userRole && (
-                <span className={`hidden md:inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-md border uppercase tracking-wider ${getRoleBadgeColor(activeCommunity.userRole)}`}>
+                <span className={`hidden sm:inline-block text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-md border shrink-0 ${getRoleBadgeColor(activeCommunity.userRole)}`}>
                   {activeCommunity.userRole}
                 </span>
               )}
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+
+              <ChevronDown 
+                className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`}
+                aria-hidden="true"
+              />
             </button>
 
             {dropdownOpen && (
@@ -147,14 +152,16 @@ export function Header({
                   role="menu"
                   className="absolute left-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 py-2.5 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
                 >
-                  <div className="px-3.5 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between border-b border-slate-800">
+                  <div className="px-3.5 py-1.5 border-b border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
                     <span>Joined Workspaces</span>
-                    <span className="text-slate-500 font-mono text-[10px]">{joinedCommunities.length} Active</span>
+                    <span className="text-slate-400 font-mono">{joinedCommunities.length} active</span>
                   </div>
 
-                  <div className="max-h-64 overflow-y-auto py-1 divide-y divide-slate-800/60">
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-800/40 py-1">
                     {joinedCommunities.map((c) => {
                       const isSelected = c.id === activeCommunity?.id;
+                      const role = c.userRole || 'member';
+
                       return (
                         <button
                           key={c.id}
@@ -162,39 +169,35 @@ export function Header({
                           role="menuitem"
                           onClick={() => {
                             switchCommunity(c.id);
+                            document.cookie = `active_tenant_id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
+                            document.cookie = `active_community_id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
+                            document.cookie = `x-tenant-id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
                             setDropdownOpen(false);
+                            onNavigate?.('feed');
                           }}
-                          className={`w-full text-left px-3.5 py-2.5 flex items-center justify-between hover:bg-slate-800/70 transition-colors ${
-                            isSelected ? 'bg-indigo-950/40 font-medium' : ''
+                          className={`w-full text-left px-3.5 py-2.5 flex items-start justify-between hover:bg-slate-800/60 transition-colors cursor-pointer ${
+                            isSelected ? 'bg-indigo-600/10' : ''
                           }`}
                         >
-                          <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                            <div className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
-                              {c.logoUrl ? (
-                                <img src={c.logoUrl} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <Building2 className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+                          <div className="min-w-0 pr-2">
+                            <div className="text-xs font-semibold text-slate-100 flex items-center gap-1.5 truncate">
+                              <span className="truncate">{c.name}</span>
+                              {isSelected && (
+                                <span className="text-[10px] text-indigo-400 font-bold shrink-0">· Active</span>
                               )}
                             </div>
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-slate-100 truncate flex items-center gap-1.5">
-                                <span className="truncate">{c.name}</span>
-                                {isSelected && (
-                                  <span className="text-[10px] font-medium text-indigo-400 bg-indigo-950 px-1.5 py-0.5 rounded-md shrink-0 border border-indigo-800/80">
-                                    Active
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
-                                <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded-md border uppercase tracking-wider ${getRoleBadgeColor(c.userRole)}`}>
-                                  {c.userRole || 'member'}
-                                </span>
-                                <span className="text-slate-600">·</span>
-                                <span className="truncate">@{c.slug}</span>
-                              </div>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${getRoleBadgeColor(role)}`}>
+                                {role}
+                              </span>
+                              <span className="text-[10px] text-slate-400 truncate">
+                                {c.tagline || 'Corporate Workspace'}
+                              </span>
                             </div>
                           </div>
-                          {isSelected && <Check className="w-4 h-4 text-indigo-400 shrink-0" aria-hidden="true" />}
+                          {isSelected && (
+                            <Check className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" aria-hidden="true" />
+                          )}
                         </button>
                       );
                     })}
@@ -207,13 +210,13 @@ export function Header({
                       role="menuitem"
                       onClick={() => {
                         setDropdownOpen(false);
-                        onNavigate?.('search');
+                        onNavigate?.('communities/explore');
                       }}
                       className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 rounded-xl flex items-center justify-between transition-colors group cursor-pointer"
                     >
                       <div className="flex items-center gap-2">
                         <Search className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" aria-hidden="true" />
-                        <span>Explore &amp; Search Communities</span>
+                        <span>Explore &amp; Discover Workspaces</span>
                       </div>
                       <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">
                         Directory
@@ -237,32 +240,16 @@ export function Header({
               </>
             )}
           </div>
-
-          {/* x-tenant-id chip - visible on larger viewports */}
-          {activeCommunity && (
-            <div 
-              onClick={copyTenantId}
-              className="hidden xl:flex items-center gap-1.5 text-xs font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 cursor-pointer hover:bg-slate-800 hover:text-slate-200 transition-colors"
-              title="Click to copy active tenant UUID"
-            >
-              <span>x-tenant-id: {activeCommunity.id.slice(0, 8)}...</span>
-              {copiedTenantId ? (
-                <Check className="w-3 h-3 text-teal-400" aria-hidden="true" />
-              ) : (
-                <Copy className="w-3 h-3 text-slate-500" aria-hidden="true" />
-              )}
-            </div>
-          )}
         </div>
 
-        {/* RIGHT: SEARCH SHORTCUT, PENDING REQUESTS & USER PROFILE */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Quick Search Button */}
+        {/* RIGHT: SEARCH, NOTIFICATIONS, RLS BADGE, PROFILE */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Quick Search Shortcut */}
           <button
             type="button"
             onClick={() => onNavigate?.('search')}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-900 hover:bg-slate-800 rounded-xl transition-all border border-slate-800 min-h-[44px] min-w-[44px] sm:min-w-0 sm:min-h-0 justify-center touch-manipulation focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-400 cursor-pointer"
-            title="Search workspaces and directory"
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-900 hover:bg-slate-800 rounded-xl transition-all border border-slate-800 min-h-[40px] cursor-pointer"
+            title="Global search across workspaces, channels, events"
             aria-label="Open search dialog"
           >
             <Search className="w-4 h-4 text-slate-400" aria-hidden="true" />
@@ -272,32 +259,44 @@ export function Header({
             </kbd>
           </button>
 
+          {/* Notifications Link */}
+          <button
+            type="button"
+            onClick={() => onNavigate?.('notifications')}
+            className="flex items-center justify-center min-w-[40px] min-h-[40px] rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-800 transition-colors cursor-pointer relative"
+            title="Workspace Notifications"
+            aria-label="View notifications"
+          >
+            <Bell className="w-4 h-4" />
+            <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-500" />
+          </button>
+
           {/* Pending Requests Notification Bell */}
           {pendingRequestsCount > 0 && (
             <button
               type="button"
               onClick={onOpenJoinRequests}
-              className="flex items-center justify-center min-w-[44px] min-h-[44px] text-xs font-semibold text-amber-400 bg-amber-950/60 hover:bg-amber-900/60 rounded-xl border border-amber-800/80 transition-colors animate-pulse touch-manipulation cursor-pointer"
+              className="flex items-center justify-center min-w-[40px] min-h-[40px] px-2 text-xs font-semibold text-amber-400 bg-amber-950/60 hover:bg-amber-900/60 rounded-xl border border-amber-800/80 transition-colors animate-pulse cursor-pointer"
               title="Review pending membership access requests"
               aria-label={`Review ${pendingRequestsCount} pending join requests`}
             >
-              <Bell className="w-4 h-4 text-amber-400" aria-hidden="true" />
-              <span className="ml-1 font-bold">{pendingRequestsCount}</span>
+              <ShieldCheck className="w-4 h-4 text-amber-400" aria-hidden="true" />
+              <span className="ml-1 font-bold text-[11px]">{pendingRequestsCount}</span>
             </button>
           )}
 
-          {/* Live Status indicator */}
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 text-[11px] font-semibold text-teal-400 bg-teal-950/40 rounded-full border border-teal-800/60">
+          {/* Live RLS Status badge */}
+          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-teal-400 bg-teal-950/40 rounded-full border border-teal-800/60">
             <span className="w-2 h-2 rounded-full bg-teal-400 inline-block animate-pulse" />
             <span>RLS Active</span>
           </div>
 
-          {/* Profile Avatar: 44x44 physical touch area */}
+          {/* Profile Avatar */}
           {currentSession?.user && (
             <button 
               type="button"
               onClick={() => onNavigate?.('profile')}
-              className="flex items-center justify-center min-w-[44px] min-h-[44px] cursor-pointer group touch-manipulation focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-full"
+              className="flex items-center justify-center min-w-[40px] min-h-[40px] cursor-pointer group rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-400"
               title={`Signed in as ${currentSession.user.fullName}`}
               aria-label={`View profile for ${currentSession.user.fullName}`}
             >
@@ -313,7 +312,6 @@ export function Header({
                     {currentSession.user.fullName.charAt(0)}
                   </div>
                 )}
-                {/* Online status indicator dot */}
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-teal-400 ring-2 ring-slate-950" />
               </div>
             </button>
