@@ -368,6 +368,23 @@ class SynclyApiClient {
     }
   }
 
+  // --- MEMBERSHIP & ROSTER ---
+  public async getWorkspaceMembers(tenantId?: string): Promise<any[]> {
+    try {
+      const headers = this.getHeaders();
+      if (tenantId) {
+        (headers as Record<string, string>)['x-tenant-id'] = tenantId;
+      }
+      const res = await fetch('/api/tenant/members', { headers });
+      if (!res.ok) throw new Error('Failed to fetch workspace members');
+      const json = await res.json();
+      return json.data || [];
+    } catch (e) {
+      console.warn('API getWorkspaceMembers error:', e);
+      return [];
+    }
+  }
+
   // --- MESSAGES ---
   public async getMessages(channelId: string): Promise<ChatMessage[]> {
     try {

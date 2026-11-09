@@ -49,6 +49,15 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({}));
+    
+    // Explicitly reject any attempt to submit privileged role modifications
+    if ('role' in body) {
+      return NextResponse.json(
+        { error: 'Forbidden. Role modifications cannot be performed through self-service profile updates.' },
+        { status: 403 }
+      );
+    }
+
     const { fullName, avatarUrl } = body;
 
     const supabase = await createClient(request);
