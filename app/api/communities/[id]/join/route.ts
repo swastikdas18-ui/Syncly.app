@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
-import { buildTenantSessionSql } from '@/lib/tenant/context.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { createAdminClient } from '@/lib/supabase/admin.ts';
 import { checkRateLimit } from '@/lib/rate-limit.ts';
@@ -52,19 +51,17 @@ export async function POST(
 
   try {
     const { id: communityId } = await params;
+
     if (!communityId || !UUID_REGEX.test(communityId)) {
       return NextResponse.json({ error: 'Invalid community identifier.' }, { status: 400 });
     }
 
     const body = await request.json().catch(() => ({}));
-    const message = typeof body.message === 'string' ? body.message.trim().slice(0, 500) : '';
-
-    const email = auth.email.toLowerCase().trim();
-    const domain = email.includes('@') ? email.split('@')[1] : '';
+    const { message } = body;
 
     const supabase = await createClient(request);
 
-    // 3. Check if user is already an active member of this community
+    // 3. Check for existing active membership
     const { data: existingMembership } = await supabase
       .from('memberships')
       .select('id, role')
@@ -73,30 +70,36 @@ export async function POST(
       .maybeSingle();
 
     if (existingMembership) {
-      return NextResponse.json(
-        { error: 'Conflict. You are already an active member of this workspace.', status: 'already_member' },
-        { status: 409 }
-      );
+      return NextResponse.json({
+        error: 'Conflict. You are already an active member of this community.',
+        status: 'joined',
+      }, { status: 409 });
     }
 
-    // 4. Query target tenant details from database
-    const { data: tenant, error: tenantError } = await supabase
+    // 4. Fetch community settings
+    const { data: tenantData, error: tErr } = await supabase
       .from('tenants')
-      .select('id, name, requires_approval, allowed_domains')
+      .select('id, name, allowed_domains, requires_approval')
       .eq('id', communityId)
       .maybeSingle();
 
-    if (tenantError || !tenant) {
-      return NextResponse.json({ error: 'Target workspace not found.' }, { status: 404 });
+    if (tErr || !tenantData) {
+      return NextResponse.json({ error: 'Community not found.' }, { status: 404 });
     }
 
-    const tData = tenant as { id: string; name: string; requires_approval: boolean; allowed_domains: string[] };
-    const allowedDomains: string[] = Array.isArray(tData.allowed_domains)
-      ? tData.allowed_domains.map((d: string) => d.toLowerCase().trim().replace(/^@/, ''))
-      : [];
-    const domainMatches = allowedDomains.length > 0 && allowedDomains.includes(domain);
+    const tData = tenantData as {
+      id: string;
+      name: string;
+      allowed_domains?: string[] | null;
+      requires_approval?: boolean | null;
+    };
 
-    // 5. Auto-join workflow (when approval is not required AND domain matches, or open enrollment)
+    const email = auth.email;
+    const domain = email.split('@')[1]?.toLowerCase();
+    const allowedDomains = (tData.allowed_domains || []).map((d: string) => d.toLowerCase().replace(/^@/, ''));
+    const domainMatches = domain && allowedDomains.includes(domain);
+
+    // 5. Instant Join Eligibility
     if (!tData.requires_approval && (allowedDomains.length === 0 || domainMatches)) {
       const { error: insertError } = await supabase
         .from('memberships')
@@ -112,7 +115,6 @@ export async function POST(
           status: 'joined',
           message: `Instant access granted${domainMatches ? ` via verified domain (@${domain})` : ''}.`,
           tenantId: communityId,
-          rlsContextSql: buildTenantSessionSql(communityId),
         });
 
         response.cookies.set('active_tenant_id', communityId, {
@@ -179,7 +181,6 @@ export async function POST(
       status: 'pending',
       message: 'Join request queued for administrator review.',
       request: newReq,
-      rlsContextSql: buildTenantSessionSql(communityId),
     }, { status: 202 });
   } catch (err: any) {
     console.error('[API Join] Internal error:', err);

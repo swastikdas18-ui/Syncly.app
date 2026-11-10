@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
-import { buildTenantSessionSql } from '@/lib/tenant/context.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 
 /**
@@ -27,7 +26,6 @@ export async function GET(request: NextRequest) {
     },
     profile: auth.profile,
     memberships: auth.memberships,
-    rlsContextSql: buildTenantSessionSql(auth.activeTenantId),
   });
 }
 
@@ -48,28 +46,33 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const body = await request.json().catch(() => ({}));
-    
-    // Explicitly reject any attempt to submit privileged role modifications
-    if ('role' in body) {
-      return NextResponse.json(
-        { error: 'Forbidden. Role modifications cannot be performed through self-service profile updates.' },
-        { status: 403 }
-      );
+    const body = await request.json();
+
+    // Whitelist permitted self-service fields
+    const updatePayload: Record<string, any> = {};
+
+    if (body.fullName !== undefined) {
+      if (typeof body.fullName !== 'string' || body.fullName.trim().length === 0) {
+        return NextResponse.json(
+          { error: 'Full name cannot be empty.' },
+          { status: 400 }
+        );
+      }
+      updatePayload.full_name = body.fullName.trim();
     }
 
-    const { fullName, avatarUrl } = body;
+    if (body.avatarUrl !== undefined) {
+      if (body.avatarUrl && !body.avatarUrl.startsWith('http://') && !body.avatarUrl.startsWith('https://')) {
+        return NextResponse.json(
+          { error: 'Avatar URL must use http or https scheme.' },
+          { status: 400 }
+        );
+      }
+      updatePayload.avatar_url = body.avatarUrl;
+    }
 
+    // Role/tenant escalation prevention: ignore client role or tenant modifications
     const supabase = await createClient(request);
-
-    // Update public.profiles in database for the authenticated user only
-    const updatePayload: { full_name?: string; avatar_url?: string } = {};
-    if (typeof fullName === 'string' && fullName.trim()) {
-      updatePayload.full_name = fullName.trim();
-    }
-    if (typeof avatarUrl === 'string') {
-      updatePayload.avatar_url = avatarUrl.trim();
-    }
 
     if (Object.keys(updatePayload).length > 0) {
       const { error: updateError } = await (supabase.from('profiles') as any)
@@ -77,7 +80,6 @@ export async function PATCH(request: NextRequest) {
         .eq('id', auth.userId);
 
       if (updateError) {
-        // Redacted diagnostic logging: log code & message without leaking PII or credentials
         console.error('[API /api/profile] Database update failure:', {
           code: updateError.code,
           message: updateError.message,
@@ -87,7 +89,6 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json(
           {
             error: 'Database error occurred while updating profile.',
-            details: updateError.message
           },
           { status: 500 }
         );
@@ -105,7 +106,6 @@ export async function PATCH(request: NextRequest) {
         tenantId: auth.activeTenantId,
       },
       message: 'Profile updated successfully. Role modifications are restricted to workspace administrators.',
-      rlsContextSql: buildTenantSessionSql(auth.activeTenantId),
     });
   } catch (err: any) {
     return NextResponse.json(

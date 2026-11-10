@@ -13,6 +13,23 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Handle membership query failure explicitly: return HTTP 503 rather than claiming 0 memberships
+  if (auth.membershipStatus === 'error') {
+    return NextResponse.json(
+      { error: 'Membership service temporarily unavailable.' },
+      { status: 503 }
+    );
+  }
+
+  // Verified legitimate empty state (user holds 0 memberships)
+  if (auth.membershipStatus === 'empty' || auth.memberships.length === 0) {
+    return NextResponse.json({
+      success: true,
+      count: 0,
+      data: [],
+    });
+  }
+
   const supabase = await createClient(request);
 
   // Retrieve actual tenant details from database
@@ -48,10 +65,10 @@ export async function GET(request: NextRequest) {
       name: 'Corporate Workspace',
       slug: 'workspace',
     };
+
     return {
       id: m.id,
-      userId: auth.userId,
-      userEmail: auth.email,
+      userId: m.user_id,
       communityId: m.community_id,
       role: m.role,
       joinedAt: m.joined_at,
@@ -61,7 +78,6 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    userEmail: auth.email,
     count: userMemberships.length,
     data: userMemberships,
   });

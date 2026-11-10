@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
-import { buildTenantSessionSql } from '@/lib/tenant/context.ts';
 
 export async function GET(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
@@ -16,7 +15,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: true,
     tenantId,
-    rlsContextSql: buildTenantSessionSql(tenantId),
     count: 0,
     data: [],
   });
@@ -53,7 +51,6 @@ export async function POST(request: NextRequest) {
       category: category || 'all-hands',
       rsvpCount: 1,
       createdAt: new Date().toISOString(),
-      rlsContextSql: buildTenantSessionSql(tenantId),
     };
 
     return NextResponse.json({ success: true, data: newEvent }, { status: 201 });

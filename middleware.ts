@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://syncly-demo-workspace.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.syncly_anon_placeholder_key';
+import { getSupabaseConfig } from '@/lib/supabase/config.ts';
 
 /**
  * Edge Middleware for Supabase SSR Session Refresh & Navigation Protection.
  * 
- * SECURITY RULES:
+ * SECURITY RULES (Cycle 10.4):
  * 1. Uses @supabase/ssr createServerClient to refresh authentication tokens.
  * 2. Does NOT author or trust custom HMAC tokens.
  * 3. Protected UI routes redirect unauthenticated visitors to /login.
- * 4. Fails closed: Never injects a default tenant (Acme) when tenant context is missing.
- * 5. Downstream API routes must independently verify identity and permissions.
+ * 4. Fails closed: Never injects a default tenant when tenant context is missing.
+ * 5. Does NOT treat user_metadata.tenant_id as authoritative membership truth.
+ *    Authoritative workspace authorization is delegated to the server-side route
+ *    authorization layer (lib/auth/server.ts), which queries public.memberships.
+ * 6. Preserves CSRF origin protection on API mutations.
  */
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -24,13 +25,12 @@ export async function middleware(req: NextRequest) {
   });
 
   let isAuthenticated = false;
-  let verifiedUserId: string | null = null;
-  let verifiedTenantId: string | null = null;
 
   try {
+    const { url, anonKey } = getSupabaseConfig();
     const supabase = createServerClient(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY,
+      url,
+      anonKey,
       {
         cookies: {
           getAll() {
@@ -52,15 +52,13 @@ export async function middleware(req: NextRequest) {
     );
 
     // Authoritative check with Supabase Auth
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
 
-    if (user) {
+    if (user && !userErr) {
       isAuthenticated = true;
-      verifiedUserId = user.id;
-      verifiedTenantId = user.user_metadata?.tenant_id || null;
     }
   } catch {
-    // Supabase Auth unreachable, token malformed, or offline
+    // Supabase Auth unreachable, token malformed, or offline -> fail closed
     isAuthenticated = false;
   }
 
@@ -85,26 +83,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/feed', req.url));
   }
 
-  // 3. Edge perimeter check: Intercept cross-tenant tampering on API routes
-  if (isAuthenticated && verifiedTenantId && pathname.startsWith('/api/')) {
-    const rawHeaderTenant = req.headers.get('x-tenant-id');
-    const rawCookieTenant = req.cookies.get('active_tenant_id')?.value;
-
-    if (rawHeaderTenant && rawHeaderTenant.toLowerCase() !== verifiedTenantId.toLowerCase()) {
-      return NextResponse.json(
-        { error: 'Forbidden. Cross-tenant header tampering denied.' },
-        { status: 403 }
-      );
-    }
-    if (rawCookieTenant && rawCookieTenant.toLowerCase() !== verifiedTenantId.toLowerCase()) {
-      return NextResponse.json(
-        { error: 'Forbidden. Cross-tenant cookie tampering denied.' },
-        { status: 403 }
-      );
-    }
-  }
-
-  // 4. CSRF Defense: For state-changing mutations on API routes, verify Origin / Referer
+  // 3. CSRF Defense: For state-changing mutations on API routes, verify Origin / Referer
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && pathname.startsWith('/api/')) {
     const origin = req.headers.get('origin');
     const host = req.headers.get('host');
@@ -124,11 +103,6 @@ export async function middleware(req: NextRequest) {
         );
       }
     }
-  }
-
-  // 4. Fail-closed: Propagate verified tenant ONLY if authenticated and present
-  if (verifiedTenantId) {
-    response.headers.set('x-tenant-id', verifiedTenantId);
   }
 
   return response;

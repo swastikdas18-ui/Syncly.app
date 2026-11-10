@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 
 /**
@@ -50,8 +49,8 @@ export async function POST(request: NextRequest) {
       'image/gif',
       'image/webp',
       'application/pdf',
-      'text/plain',
     ];
+
     if (file.type && !ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
         { error: `File type '${file.type}' is not permitted.` },
@@ -82,8 +81,6 @@ export async function POST(request: NextRequest) {
         type: file.type,
         isPartitionValid,
         isPrivate: true,
-        rlsPolicyCheck: 'PASSED (Tenant folder matches session context; bucket is private)',
-        rlsContextSql: buildTenantSessionSql(effectiveTenantId),
       },
       { status: 201 }
     );

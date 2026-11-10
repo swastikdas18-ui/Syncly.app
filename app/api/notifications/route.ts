@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts';
+import { getTenantContext } from '@/lib/tenant/context.ts';
 
 export async function GET(request: NextRequest) {
   const { tenantId, isValid } = await getTenantContext();
@@ -12,7 +12,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: true,
     tenantId,
-    rlsContextSql: buildTenantSessionSql(tenantId),
     count: 0,
     data: [],
   });

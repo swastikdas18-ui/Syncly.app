@@ -11,3 +11,5 @@ coverage/
 
 # Security staging export
 **/staging_logical_export.json
+
+.credentials_rotation_local.json

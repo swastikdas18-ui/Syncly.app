@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
-import { buildTenantSessionSql } from '@/lib/tenant/context.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 
 export const dynamic = 'force-dynamic';
@@ -10,10 +9,12 @@ export const dynamic = 'force-dynamic';
  * 
  * Strict Tenant-Isolated Members Roster:
  * 1. Authenticates caller session cryptographically.
- * 2. Resolves target workspace ID from request header `x-tenant-id` or active session.
- * 3. Verifies caller holds an active membership in the target workspace.
- * 4. Queries `memberships` table filtered strictly by `community_id = targetWorkspaceId`.
- * 5. Returns only members authorized for that specific workspace.
+ * 2. Checks membership verification status: fails with 503 if memberships query had database error.
+ * 3. Resolves target workspace ID from request header `x-tenant-id` or active session.
+ * 4. Verifies caller holds an active membership in the target workspace (403 if unauthorized).
+ * 5. Queries `memberships` table filtered strictly by `community_id = targetWorkspaceId`.
+ * 6. Fetches corresponding profile records. Fails closed with 500 if profile query errors (never silently falls back).
+ * 7. Returns sanitized member list without internal SQL or diagnostic leaks.
  */
 export async function GET(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
@@ -27,6 +28,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { error: auth.error || 'Unauthorized. Valid Supabase session required.' },
       { status: 401 }
+    );
+  }
+
+  // Handle membership query failure explicitly (fail closed with 503)
+  if (auth.membershipStatus === 'error') {
+    return NextResponse.json(
+      { error: 'Membership verification service temporarily unavailable.' },
+      { status: 503 }
     );
   }
 
@@ -73,10 +82,19 @@ export async function GET(request: NextRequest) {
   // Fetch corresponding profiles
   let profileMap: Record<string, any> = {};
   if (userIds.length > 0) {
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profileErr } = await supabase
       .from('profiles')
       .select('id, full_name, avatar_url, role, status, created_at')
       .in('id', userIds);
+
+    // Fail closed if profile query encounters an error (do not silently show broken/generic members)
+    if (profileErr) {
+      console.error('[tenant/members] Profile lookup error:', profileErr);
+      return NextResponse.json(
+        { error: 'Failed to load member profiles.' },
+        { status: 500 }
+      );
+    }
 
     if (profiles) {
       profiles.forEach((p: any) => {
@@ -103,7 +121,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: true,
     tenantId: targetTenantId,
-    rlsContextSql: buildTenantSessionSql(targetTenantId),
     count: members.length,
     data: members,
   });

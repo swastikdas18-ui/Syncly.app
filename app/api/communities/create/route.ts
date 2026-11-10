@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
-import { buildTenantSessionSql } from '@/lib/tenant/context.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { checkRateLimit } from '@/lib/rate-limit.ts';
 
@@ -49,8 +48,10 @@ export async function POST(request: NextRequest) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
-    const parsedDomains = Array.isArray(allowedDomains)
-      ? allowedDomains.map((d: string) => d.trim().replace(/^@/, '').toLowerCase()).filter(Boolean)
+    const sanitizedDomains = Array.isArray(allowedDomains)
+      ? allowedDomains
+          .map((d: any) => String(d).trim().toLowerCase().replace(/^@/, ''))
+          .filter(Boolean)
       : [];
 
     const supabase = await createClient(request);
@@ -63,30 +64,13 @@ export async function POST(request: NextRequest) {
       p_description: description?.trim() || null,
       p_logo_url: logoUrl?.trim() || null,
       p_industry: industry?.trim() || null,
-      p_allowed_domains: parsedDomains,
+      p_allowed_domains: sanitizedDomains,
       p_requires_approval: requiresApproval === true,
       p_is_discoverable: isDiscoverable !== false,
     });
 
     if (rpcError) {
-      if (rpcError.code === '42883' || rpcError.code === 'PGRST202' || rpcError.message?.includes('Could not find the function')) {
-        console.error('[WorkspaceCreate] Atomic RPC unavailable (Migration 018 required):', {
-          code: rpcError.code,
-          message: rpcError.message,
-        });
-        return NextResponse.json(
-          {
-            error: 'Atomic workspace creation service is unavailable. Database migration 018 (create_workspace RPC) must be applied to ensure transactional consistency.',
-            code: 'RPC_UNAVAILABLE',
-          },
-          { status: 503 }
-        );
-      }
-
-      console.error('[WorkspaceCreate] Database error executing create_workspace RPC:', {
-        code: rpcError.code,
-        message: rpcError.message,
-      });
+      console.error('[create_workspace RPC Error]:', rpcError);
       return NextResponse.json(
         { error: 'Failed to create workspace: ' + (rpcError.message || 'Database error') },
         { status: 500 }
@@ -106,7 +90,6 @@ export async function POST(request: NextRequest) {
       success: true,
       data: createdData,
       message: `Community created successfully. Creator assigned role = 'owner'.`,
-      rlsContextSql: buildTenantSessionSql(createdData.id),
     }, { status: 201 });
 
     response.cookies.set('active_tenant_id', createdData.id, {

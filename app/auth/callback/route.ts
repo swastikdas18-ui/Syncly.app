@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { Database } from '@/types/database.ts';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://syncly-demo-workspace.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.syncly_anon_placeholder_key';
+import { getSupabaseConfig } from '@/lib/supabase/config.ts';
 
 /**
  * GET /auth/callback
@@ -19,9 +17,11 @@ export async function GET(request: NextRequest) {
 
   const response = NextResponse.redirect(new URL(next, request.url));
 
+  const { url, anonKey } = getSupabaseConfig();
+
   const supabase = createServerClient<Database>(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {
@@ -52,15 +52,14 @@ export async function GET(request: NextRequest) {
         type,
       });
       if (error) {
-        console.error('[Auth Callback OTP Verify Error]:', error.message);
-        return NextResponse.redirect(new URL('/login?error=token_expired', request.url));
+        console.error('[Auth Callback OTP Verification Error]:', error.message);
+        return NextResponse.redirect(new URL('/login?error=otp_failed', request.url));
       }
     }
-  } catch (err: any) {
-    console.error('[Auth Callback Exception]:', err?.message || err);
-    return NextResponse.redirect(new URL('/login?error=auth_callback_failed', request.url));
+  } catch (err) {
+    console.error('[Auth Callback Unexpected Error]:', err);
+    return NextResponse.redirect(new URL('/login?error=unexpected', request.url));
   }
 
   return response;
 }
-
