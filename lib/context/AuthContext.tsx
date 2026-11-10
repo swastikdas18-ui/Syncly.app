@@ -211,10 +211,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Listen to workspace-changed events: REVALIDATE with database memberships rather than blindly adopting localStorage
   useEffect(() => {
-    const handleWorkspaceChanged = async () => {
+    const handleWorkspaceChanged = async (event?: Event) => {
       if (session?.user?.id) {
-        // Re-verify against live public.memberships table rather than trusting localStorage
-        await fetchProfileAndTenant(session.user.id);
+        // Extract requested tenantId from CustomEvent detail if available, or cookie
+        const customDetailId = (event as CustomEvent)?.detail?.tenantId;
+        const cookieId = typeof document !== 'undefined'
+          ? document.cookie.match(/active_tenant_id=([^;]+)/)?.[1]
+          : undefined;
+        const preferredTenantId = customDetailId !== undefined ? customDetailId : cookieId;
+
+        // Re-verify against live public.memberships table passing untrusted preference
+        await fetchProfileAndTenant(session.user.id, preferredTenantId || undefined);
       }
     };
 

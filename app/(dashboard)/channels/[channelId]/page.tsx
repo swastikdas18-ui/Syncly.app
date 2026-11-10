@@ -7,14 +7,14 @@ import { useTenant } from '@/lib/context/AuthContext.tsx';
 import { useWorkspace } from '@/lib/context/WorkspaceContext.tsx';
 import { Channel } from '@/src/types.ts';
 import { api } from '@/src/lib/api.ts';
-import { Building2, Compass, PlusCircle, AlertCircle, RefreshCw, MessageSquare, ShieldAlert, Lock } from 'lucide-react';
+import { Building2, Compass, PlusCircle, AlertCircle, RefreshCw, MessageSquare, ShieldAlert, Lock, Loader2 } from 'lucide-react';
 
 export default function ChannelDashboardPage() {
   const router = useRouter();
   const params = useParams();
   const channelId = (params?.channelId as string) || '';
-  const { activeTenant } = useTenant();
-  const { activeCommunity, isLoading: isWorkspaceLoading } = useWorkspace();
+  const { activeTenant, membershipStatus: authMemStatus, membershipError: authMemError, retryMembershipFetch } = useTenant();
+  const { activeCommunity, isLoading: isWorkspaceLoading, membershipStatus: wsMemStatus, membershipError: wsMemError, refreshMemberships } = useWorkspace();
 
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState<string>(channelId);
@@ -23,6 +23,17 @@ export default function ChannelDashboardPage() {
 
   const verifiedWorkspace = activeCommunity || activeTenant;
   const hasMembership = Boolean(verifiedWorkspace?.id);
+
+  // Unified Membership Status across Auth & Workspace contexts
+  const isMembershipLoading = authMemStatus === 'loading' || wsMemStatus === 'loading' || isWorkspaceLoading;
+  const isMembershipError = authMemStatus === 'error' || wsMemStatus === 'error';
+  const membershipErrorMessage = authMemError || wsMemError || 'Failed to query workspace memberships.';
+
+  const handleRetryAll = async () => {
+    if (retryMembershipFetch) await retryMembershipFetch();
+    if (refreshMemberships) await refreshMemberships();
+    await loadChannels();
+  };
 
   const loadChannels = async () => {
     if (!verifiedWorkspace?.id) {
@@ -63,8 +74,12 @@ export default function ChannelDashboardPage() {
   };
 
   useEffect(() => {
-    loadChannels();
-  }, [verifiedWorkspace?.id]);
+    if (hasMembership) {
+      loadChannels();
+    } else {
+      setIsLoading(false);
+    }
+  }, [verifiedWorkspace?.id, hasMembership]);
 
   useEffect(() => {
     if (channelId) {
@@ -72,8 +87,41 @@ export default function ChannelDashboardPage() {
     }
   }, [channelId]);
 
-  // Zero-Membership Onboarding View
-  if (!hasMembership && !isWorkspaceLoading) {
+  // 1. Loading State (Context or Channel Fetching)
+  if (isMembershipLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-6 space-y-3">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+        <p className="text-xs text-slate-400 font-medium">Verifying workspace membership...</p>
+      </div>
+    );
+  }
+
+  // 2. Membership Query Error State (NEVER falsely state "Zero Memberships")
+  if (isMembershipError && !hasMembership) {
+    return (
+      <div className="max-w-md mx-auto my-14 p-6 rounded-2xl bg-rose-950/20 border border-rose-500/30 text-center space-y-4 animate-in fade-in duration-200">
+        <div className="w-12 h-12 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-rose-200">Membership Query Error</h3>
+          <p className="text-xs text-rose-300/80 leading-relaxed">{membershipErrorMessage}</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleRetryAll}
+          className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs inline-flex items-center gap-2 transition-colors cursor-pointer shadow-sm"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Retry Membership Check</span>
+        </button>
+      </div>
+    );
+  }
+
+  // 3. Legitimate Zero-Membership Onboarding View
+  if (!hasMembership) {
     return (
       <div className="max-w-xl mx-auto py-12 px-4 text-center space-y-5 animate-in fade-in duration-200">
         <div className="w-14 h-14 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto shadow-md">
@@ -111,7 +159,7 @@ export default function ChannelDashboardPage() {
     );
   }
 
-  // HTTP 401 Unauthorized State
+  // 4. HTTP 401 Unauthorized State
   if (loadError && loadError.statusCode === 401) {
     return (
       <div className="max-w-md mx-auto my-12 p-6 rounded-2xl bg-amber-950/20 border border-amber-500/30 text-center space-y-4">
@@ -133,7 +181,7 @@ export default function ChannelDashboardPage() {
     );
   }
 
-  // HTTP 403 Forbidden / Access-Restricted State
+  // 5. HTTP 403 Forbidden / Access-Restricted State
   if (loadError && loadError.statusCode === 403) {
     return (
       <div className="max-w-md mx-auto my-12 p-6 rounded-2xl bg-slate-900/90 border border-slate-800 text-center space-y-4">
@@ -155,7 +203,7 @@ export default function ChannelDashboardPage() {
     );
   }
 
-  // HTTP 500 / Network Error State with Retry Button
+  // 6. HTTP 500 / Network Error State with Retry Button
   if (loadError) {
     return (
       <div className="max-w-md mx-auto my-12 p-6 rounded-2xl bg-rose-950/20 border border-rose-500/30 text-center space-y-4">
@@ -178,7 +226,7 @@ export default function ChannelDashboardPage() {
     );
   }
 
-  // Empty State when workspace has no channels created yet (HTTP 200 with 0 channels)
+  // 7. Empty State when workspace has no channels created yet (HTTP 200 with 0 channels)
   if (!isLoading && channels.length === 0) {
     return (
       <div className="max-w-md mx-auto my-16 p-8 text-center space-y-4 border border-dashed border-slate-800 rounded-2xl bg-slate-900/40">

@@ -61,7 +61,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
         document.cookie = `active_community_id=; path=/; max-age=0; SameSite=Lax`;
         document.cookie = `x-tenant-id=; path=/; max-age=0; SameSite=Lax`;
         document.cookie = `syncly_role=; path=/; max-age=0; SameSite=Lax`;
-        window.dispatchEvent(new Event('workspace-changed'));
+        window.dispatchEvent(new CustomEvent('workspace-changed', { detail: { tenantId: null } }));
       }
       return;
     }
@@ -88,7 +88,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
       if (comm.userRole) {
         document.cookie = `syncly_role=${comm.userRole}; path=/; max-age=86400; SameSite=Lax`;
       }
-      window.dispatchEvent(new Event('workspace-changed'));
+      window.dispatchEvent(new CustomEvent('workspace-changed', { detail: { tenantId: comm.id } }));
     }
   }, []);
 
