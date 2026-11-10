@@ -13,13 +13,27 @@ export async function POST(
   // 1. Enforce verified authentication
   const auth = await getVerifiedAuthContext(request);
   if (!auth.isAuthenticated || !auth.userId) {
+    if (auth.error && auth.error.startsWith('Forbidden.')) {
+      return NextResponse.json({ error: auth.error }, { status: 403 });
+    }
+    if (auth.error && auth.error.startsWith('Bad Request.')) {
+      return NextResponse.json({ error: auth.error }, { status: 400 });
+    }
     return NextResponse.json(
-      { error: 'Unauthorized. Valid Supabase session required.' },
+      { error: auth.error || 'Unauthorized. Valid Supabase session required.' },
       { status: 401 }
     );
   }
 
-  // 2. Reject suspended or inactive accounts
+  // 2. Reject if membership database query failed
+  if (auth.membershipStatus === 'error') {
+    return NextResponse.json(
+      { error: 'Membership verification service temporarily unavailable.' },
+      { status: 503 }
+    );
+  }
+
+  // 3. Reject suspended or inactive accounts
   if (auth.profile?.status && auth.profile.status !== 'active') {
     return NextResponse.json(
       { error: `Forbidden. Account status is '${auth.profile.status}'.` },

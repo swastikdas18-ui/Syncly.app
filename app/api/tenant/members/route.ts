@@ -19,6 +19,12 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
   if (!auth.isAuthenticated || !auth.userId) {
+    if (auth.error && auth.error.startsWith('Bad Request.')) {
+      return NextResponse.json(
+        { error: auth.error },
+        { status: 400 }
+      );
+    }
     if (auth.error && auth.error.startsWith('Forbidden.')) {
       return NextResponse.json(
         { error: auth.error },

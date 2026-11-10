@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { handleAuthErrors } from '@/lib/auth/guard.ts';
 import { checkRateLimit } from '@/lib/rate-limit.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { Post, PostComment } from '@/src/types.ts';
@@ -17,11 +18,12 @@ interface CreatePostPayload {
  */
 export async function GET(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
-  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
-    return NextResponse.json({ error: 'Unauthorized. Valid Supabase session required.' }, { status: 401 });
+  const authError = handleAuthErrors(auth, { requireWorkspace: true });
+  if (authError) {
+    return authError;
   }
 
-  const tenantId = auth.activeTenantId;
+  const tenantId = auth.activeTenantId!;
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get('category') || 'all';
   const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
@@ -169,14 +171,12 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
-  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
-    return NextResponse.json(
-      { error: 'Unauthorized. Cryptographically verified authentication required.' },
-      { status: 401 }
-    );
+  const authError = handleAuthErrors(auth, { requireWorkspace: true });
+  if (authError) {
+    return authError;
   }
 
-  const effectiveTenantId = auth.activeTenantId;
+  const effectiveTenantId = auth.activeTenantId!;
 
   // Strict cross-tenant check against verified identity
   const rawHeaderTenant = request.headers.get('x-tenant-id');

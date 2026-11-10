@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { handleAuthErrors } from '@/lib/auth/guard.ts';
 
 /**
  * POST /api/media/upload
@@ -10,11 +11,12 @@ import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 export async function POST(request: NextRequest) {
   // SECURITY: Require cryptographically verified authentication
   const auth = await getVerifiedAuthContext(request);
-  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
-    return NextResponse.json({ error: 'Unauthorized. Cryptographically verified authentication required.' }, { status: 401 });
+  const authError = handleAuthErrors(auth, { requireWorkspace: true });
+  if (authError) {
+    return authError;
   }
 
-  const effectiveTenantId = auth.activeTenantId;
+  const effectiveTenantId = auth.activeTenantId!;
 
   // Strict cross-tenant check against verified identity
   const rawHeaderTenant = request.headers.get('x-tenant-id');

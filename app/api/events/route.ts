@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { handleAuthErrors } from '@/lib/auth/guard.ts';
 
 export async function GET(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
-  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
-    return NextResponse.json(
-      { error: 'Unauthorized. Valid Supabase session required.' },
-      { status: 401 }
-    );
+  const authError = handleAuthErrors(auth, { requireWorkspace: true });
+  if (authError) {
+    return authError;
   }
 
-  const tenantId = auth.activeTenantId;
+  const tenantId = auth.activeTenantId!;
 
   return NextResponse.json({
     success: true,
@@ -22,14 +21,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
-  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
-    return NextResponse.json(
-      { error: 'Unauthorized. Valid Supabase session required.' },
-      { status: 401 }
-    );
+  const authError = handleAuthErrors(auth, { requireWorkspace: true });
+  if (authError) {
+    return authError;
   }
 
-  const tenantId = auth.activeTenantId;
+  const tenantId = auth.activeTenantId!;
 
   try {
     const body = await request.json();

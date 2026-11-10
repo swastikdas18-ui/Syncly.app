@@ -4,12 +4,22 @@ import type { Database } from '@/types/database.ts';
 import type { NextRequest } from 'next/server';
 import { getSupabaseConfig } from '@/lib/supabase/config.ts';
 
+let clientFactoryOverride: ((req?: NextRequest) => any) | null = null;
+
+export function __setClientFactoryOverride(fn: ((req?: NextRequest) => any) | null) {
+  clientFactoryOverride = fn;
+}
+
 /**
  * Creates a server-side Supabase client using @supabase/ssr.
  * Handles reading and setting session cookies via Next.js App Router cookies()
  * or directly from a NextRequest when provided.
  */
 export async function createClient(req?: NextRequest) {
+  if (clientFactoryOverride) {
+    return clientFactoryOverride(req);
+  }
+
   const { url, anonKey } = getSupabaseConfig();
 
   if (req) {

@@ -65,7 +65,7 @@ it('4. Rejects placeholder anonymous keys', () => {
   );
 });
 
-// 5. Malformed URL format
+// 5. Malformed URL format & protocol validation
 it('5. Malformed URL: rejects invalid protocols or hostnames', () => {
   assert.throws(
     () => validateSupabaseUrl('not-a-url'),
@@ -74,6 +74,18 @@ it('5. Malformed URL: rejects invalid protocols or hostnames', () => {
   assert.throws(
     () => validateSupabaseUrl('ftp://supabase.co'),
     /Invalid protocol/
+  );
+});
+
+// 5b. Remote HTTP URL rejection (HTTPS enforcement for remote hosts)
+it('5b. Rejects insecure HTTP for remote hosts (requires HTTPS)', () => {
+  assert.throws(
+    () => validateSupabaseUrl('http://my-supabase-project.supabase.co'),
+    /Insecure HTTP protocol is not permitted for remote host 'my-supabase-project.supabase.co'. HTTPS is required./
+  );
+  assert.throws(
+    () => validateSupabaseUrl('http://api.syncly.app'),
+    /Insecure HTTP protocol is not permitted for remote host 'api.syncly.app'. HTTPS is required./
   );
 });
 
@@ -87,6 +99,10 @@ it('6. Accepts valid production Supabase URL format', () => {
 it('7. Accepts valid localhost development URL', () => {
   const localUrl = 'http://127.0.0.1:54321';
   assert.strictEqual(validateSupabaseUrl(localUrl), localUrl);
+  const localHost = 'http://localhost:54321';
+  assert.strictEqual(validateSupabaseUrl(localHost), localHost);
+  const localIpv6 = 'http://[::1]:54321';
+  assert.strictEqual(validateSupabaseUrl(localIpv6), localIpv6);
 });
 
 // 8. Valid JWT structure for Anon Key
@@ -126,3 +142,4 @@ console.log(`TOTAL: ${passed + failed} | PASSED: ${passed} | FAILED: ${failed}`)
 console.log('================================================================');
 
 if (failed > 0) process.exit(1);
+

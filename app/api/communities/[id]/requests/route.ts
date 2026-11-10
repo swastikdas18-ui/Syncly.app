@@ -11,9 +11,23 @@ export async function GET(
 ) {
   const auth = await getVerifiedAuthContext(request);
   if (!auth.isAuthenticated || !auth.userId) {
+    if (auth.error && auth.error.startsWith('Forbidden.')) {
+      return NextResponse.json({ error: auth.error }, { status: 403 });
+    }
+    if (auth.error && auth.error.startsWith('Bad Request.')) {
+      return NextResponse.json({ error: auth.error }, { status: 400 });
+    }
     return NextResponse.json(
-      { error: 'Unauthorized. Valid Supabase session required.' },
+      { error: auth.error || 'Unauthorized. Valid Supabase session required.' },
       { status: 401 }
+    );
+  }
+
+  // Handle membership query failure explicitly (fail closed with 503)
+  if (auth.membershipStatus === 'error') {
+    return NextResponse.json(
+      { error: 'Membership verification service temporarily unavailable.' },
+      { status: 503 }
     );
   }
 

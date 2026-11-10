@@ -75,7 +75,8 @@ export async function getVerifiedAuthContext(req?: NextRequest): Promise<Verifie
     const { data: { user }, error: authError } = bearerToken ? await supabase.auth.getUser(bearerToken) : await supabase.auth.getUser();
 
     if (authError || !user) {
-      return unauthorizedResult(authError?.message || 'Unauthorized. Valid Supabase session required.');
+      const msg = authError?.message || 'Unauthorized. Valid Supabase session required.';
+      return unauthorizedResult(msg.startsWith('Unauthorized.') ? msg : `Unauthorized. ${msg}`);
     }
 
     // 2. Fetch authoritative profile from PostgreSQL public.profiles
@@ -141,58 +142,96 @@ export async function getVerifiedAuthContext(req?: NextRequest): Promise<Verifie
     }
 
     // 6. Resolve active workspace context strictly from verified memberships
-    let candidateTenantId: string | null = null;
+    const explicitHeaderTenant = req?.headers.get('x-tenant-id');
 
+    // If an explicit x-tenant-id header is provided by the client, validate it strictly
+    if (explicitHeaderTenant !== undefined && explicitHeaderTenant !== null) {
+      const trimmedHeader = explicitHeaderTenant.trim();
+      
+      // Syntax validation: Reject malformed UUIDs with HTTP 400
+      if (!isValidUUID(trimmedHeader)) {
+        return {
+          isAuthenticated: false,
+          userId: user.id,
+          email: user.email || null,
+          profile,
+          role: null,
+          activeTenantId: null,
+          tenantId: null,
+          fullName: profile.full_name || null,
+          membershipStatus: 'success',
+          memberships,
+          error: 'Bad Request. The provided x-tenant-id header is not a valid UUID format.',
+        };
+      }
+
+      // Membership verification: Check if caller holds verified membership in requested tenant
+      const normalizedHeader = trimmedHeader.toLowerCase();
+      const matchingMembership = memberships.find(
+        (m) => m.community_id.toLowerCase() === normalizedHeader
+      );
+
+      if (!matchingMembership) {
+        // Reject cross-tenant access with HTTP 403
+        return {
+          isAuthenticated: false,
+          userId: user.id,
+          email: user.email || null,
+          profile,
+          role: null,
+          activeTenantId: null,
+          tenantId: null,
+          fullName: profile.full_name || null,
+          membershipStatus: 'success',
+          memberships,
+          error: 'Forbidden. You do not hold an active membership in the requested workspace.',
+        };
+      }
+
+      // Valid explicit workspace membership
+      return {
+        isAuthenticated: true,
+        userId: user.id,
+        email: user.email || null,
+        profile,
+        role: (matchingMembership.role as any) || 'employee',
+        activeTenantId: matchingMembership.community_id,
+        tenantId: matchingMembership.community_id,
+        fullName: profile.full_name || null,
+        membershipStatus,
+        memberships,
+      };
+    }
+
+    // No explicit header provided: check cookie preferences or fallback to default verified membership
+    let candidateCookieTenantId: string | null = null;
     if (req) {
-      const headerTenant = req.headers.get('x-tenant-id');
-      const cookieTenant = req.cookies.get('active_tenant_id')?.value;
-      candidateTenantId = headerTenant || cookieTenant || null;
+      candidateCookieTenantId = req.cookies.get('active_tenant_id')?.value || null;
     } else {
       const cookieStore = await cookies();
-      candidateTenantId = cookieStore.get('active_tenant_id')?.value || null;
+      candidateCookieTenantId = cookieStore.get('active_tenant_id')?.value || null;
     }
 
     let activeTenantId: string | null = null;
     let resolvedRole: 'owner' | 'admin' | 'moderator' | 'employee' | 'intern' = (profile.role as any) || 'employee';
 
-    if (candidateTenantId && isValidUUID(candidateTenantId)) {
-      const normalizedCandidate = candidateTenantId.trim().toLowerCase();
-
-      // Sole authoritative source of truth: Check if user holds an explicit membership in requested tenant
+    if (candidateCookieTenantId && isValidUUID(candidateCookieTenantId)) {
+      const normalizedCookie = candidateCookieTenantId.trim().toLowerCase();
       const matchingMembership = memberships.find(
-        (m) => m.community_id.toLowerCase() === normalizedCandidate
+        (m) => m.community_id.toLowerCase() === normalizedCookie
       );
 
       if (matchingMembership) {
         activeTenantId = matchingMembership.community_id;
         resolvedRole = (matchingMembership.role as any) || 'employee';
       } else {
-        // If candidate tenant was requested via explicit header or cookie, and user does not belong to it,
-        // reject cross-tenant access with 403.
-        const isExplicitHeader = req && Boolean(req.headers.get('x-tenant-id'));
-        if (isExplicitHeader) {
-          return {
-            isAuthenticated: false,
-            userId: user.id,
-            email: user.email || null,
-            profile,
-            role: null,
-            activeTenantId: null,
-            tenantId: null,
-            fullName: profile.full_name || null,
-            membershipStatus: 'success',
-            memberships,
-            error: 'Forbidden. You do not hold an active membership in the requested workspace.',
-          };
-        } else {
-          // Stale browser cookie for non-enrolled workspace: reject candidate and fallback to first verified membership
-          const firstVerified = memberships[0];
-          activeTenantId = firstVerified.community_id;
-          resolvedRole = (firstVerified.role as any) || 'employee';
-        }
+        // Stale browser cookie for non-enrolled workspace: safely fallback to first verified membership
+        const firstVerified = memberships[0];
+        activeTenantId = firstVerified.community_id;
+        resolvedRole = (firstVerified.role as any) || 'employee';
       }
     } else {
-      // No candidate provided or candidate invalid: select user's first verified active membership
+      // No cookie or invalid cookie: select user's first verified active membership
       const defaultMembership = memberships[0];
       activeTenantId = defaultMembership.community_id;
       resolvedRole = (defaultMembership.role as any) || 'employee';

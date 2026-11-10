@@ -14,6 +14,17 @@ export interface SupabaseConfig {
   serviceRoleKey?: string;
 }
 
+function isLocalHostname(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  return (
+    lower === 'localhost' ||
+    lower === '127.0.0.1' ||
+    lower === '[::1]' ||
+    lower === '::1' ||
+    lower.endsWith('.localhost')
+  );
+}
+
 export function validateSupabaseUrl(url: string | undefined): string {
   if (!url || typeof url !== 'string' || !url.trim()) {
     throw new Error('[Supabase Config] NEXT_PUBLIC_SUPABASE_URL is required but was empty or undefined.');
@@ -29,11 +40,17 @@ export function validateSupabaseUrl(url: string | undefined): string {
   try {
     const parsed = new URL(trimmed);
     if (!['http:', 'https:'].includes(parsed.protocol)) {
-      throw new Error(`[Supabase Config] Invalid protocol '${parsed.protocol}'. Must be http: or https:.`);
+      throw new Error(`[Supabase Config] Invalid protocol '${parsed.protocol}'. Must be https: (or http: for localhost only).`);
     }
-    // Allow localhost/127.0.0.1 for local dev, require proper domain for production
+
     if (!parsed.hostname || parsed.hostname.length === 0) {
       throw new Error('[Supabase Config] Supabase URL lacks a valid hostname.');
+    }
+
+    // HTTPS is strictly required for all remote hosts.
+    // HTTP is permitted solely for local development (localhost, 127.0.0.1, ::1).
+    if (parsed.protocol === 'http:' && !isLocalHostname(parsed.hostname)) {
+      throw new Error(`[Supabase Config] Insecure HTTP protocol is not permitted for remote host '${parsed.hostname}'. HTTPS is required.`);
     }
   } catch (err: any) {
     throw new Error(`[Supabase Config] Malformed NEXT_PUBLIC_SUPABASE_URL: ${err.message}`, { cause: err });
