@@ -10,10 +10,14 @@ export interface JoinedCommunity extends Tenant {
   isMember?: boolean;
 }
 
+export type WorkspaceFetchStatus = 'idle' | 'loading' | 'success' | 'empty' | 'unauthorized' | 'forbidden' | 'error';
+
 interface WorkspaceContextType {
   joinedCommunities: JoinedCommunity[];
   allCommunities: Tenant[];
   activeCommunity: JoinedCommunity | null;
+  membershipStatus: WorkspaceFetchStatus;
+  membershipError: string | null;
   switchCommunity: (communityId: string) => Promise<{ success: boolean; error?: string }>;
   joinCommunity: (communityId: string, options?: { message?: string }) => Promise<{ status: string; message: string; tenant?: Tenant }>;
   batchJoin: (communityIds: string[]) => Promise<{ success: boolean; joinedCount: number; message: string }>;
@@ -32,6 +36,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
   const [joinedCommunities, setJoinedCommunities] = useState<JoinedCommunity[]>([]);
   const [activeCommunity, setActiveCommunity] = useState<JoinedCommunity | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [membershipStatus, setMembershipStatus] = useState<WorkspaceFetchStatus>('idle');
+  const [membershipError, setMembershipError] = useState<string | null>(null);
 
   // Keep a ref to the latest active community to support rollback on failure
   const activeCommunityRef = useRef<JoinedCommunity | null>(null);
@@ -94,18 +100,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
         setJoinedCommunities([]);
         syncActiveCommunity(null);
         setAllCommunities([]);
+        setMembershipStatus('idle');
+        setMembershipError(null);
         return;
       }
     } catch {
       setJoinedCommunities([]);
       syncActiveCommunity(null);
       setAllCommunities([]);
+      setMembershipStatus('idle');
+      setMembershipError(null);
       return;
     }
 
     setIsLoading(true);
+    setMembershipStatus('loading');
+    setMembershipError(null);
+
     try {
-      const [tenantsRes, membershipsRes] = await Promise.all([
+      const [tenantsRes, memResult] = await Promise.all([
         api.getTenants(),
         api.getMemberships(),
       ]);
@@ -114,8 +127,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
         setAllCommunities(tenantsRes);
       }
 
-      if (membershipsRes && Array.isArray(membershipsRes) && membershipsRes.length > 0) {
-        const enrichedJoined: JoinedCommunity[] = membershipsRes.map((m: any) => ({
+      // Handle structured membership result
+      if (memResult.status === 'success') {
+        const enrichedJoined: JoinedCommunity[] = memResult.data.map((m: any) => ({
           ...(m.community || tenantsRes.find((t: any) => t.id === (m.community_id || m.communityId)) || {
             id: m.community_id || m.communityId,
             name: 'Workspace',
@@ -126,8 +140,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
           isMember: true,
         }));
         setJoinedCommunities(enrichedJoined);
+        setMembershipStatus('success');
 
-        // Update active community if needed: only select from verified active memberships
+        // Update active community: only select from verified active memberships
         const currentActiveId = activeCommunityRef.current?.id;
         const matchingVerified = currentActiveId 
           ? enrichedJoined.find((c) => c.id === currentActiveId) 
@@ -139,14 +154,30 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
           // If no previous active or previous active is no longer a verified membership, select first verified
           syncActiveCommunity(enrichedJoined[0] || null);
         }
-      } else {
-        // Authenticated user holds 0 memberships
+      } else if (memResult.status === 'empty') {
+        // Authenticated user holds 0 memberships (legitimate empty state)
         setJoinedCommunities([]);
+        setMembershipStatus('empty');
         syncActiveCommunity(null);
+      } else if (memResult.status === 'unauthorized') {
+        setJoinedCommunities([]);
+        setMembershipStatus('unauthorized');
+        setMembershipError(memResult.error || 'Authentication required.');
+        syncActiveCommunity(null);
+      } else if (memResult.status === 'forbidden') {
+        setJoinedCommunities([]);
+        setMembershipStatus('forbidden');
+        setMembershipError(memResult.error || 'Access forbidden.');
+        syncActiveCommunity(null);
+      } else {
+        // Error state: server or network failure (DO NOT treat as empty / zero memberships)
+        setMembershipStatus('error');
+        setMembershipError(memResult.error || 'Failed to load memberships.');
+        // Do not overwrite previous active workspace with empty state on temporary error
       }
-    } catch {
-      setJoinedCommunities([]);
-      syncActiveCommunity(null);
+    } catch (err: any) {
+      setMembershipStatus('error');
+      setMembershipError(err?.message || 'Unexpected membership error.');
     } finally {
       setIsLoading(false);
     }
@@ -163,6 +194,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
       } else if (event === 'SIGNED_OUT') {
         setJoinedCommunities([]);
         setAllCommunities([]);
+        setMembershipStatus('idle');
+        setMembershipError(null);
         syncActiveCommunity(null);
       }
     });
@@ -248,6 +281,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
         joinedCommunities,
         allCommunities,
         activeCommunity,
+        membershipStatus,
+        membershipError,
         switchCommunity,
         joinCommunity,
         batchJoin,
@@ -268,6 +303,8 @@ export function useWorkspace() {
       joinedCommunities: [],
       allCommunities: [],
       activeCommunity: null,
+      membershipStatus: 'idle' as WorkspaceFetchStatus,
+      membershipError: null,
       switchCommunity: async () => ({ success: false, error: 'No workspace context' }),
       joinCommunity: async () => ({ status: 'error', message: 'No workspace context' }),
       batchJoin: async () => ({ success: false, joinedCount: 0, message: 'No workspace context' }),

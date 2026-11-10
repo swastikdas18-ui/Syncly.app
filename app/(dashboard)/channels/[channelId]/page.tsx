@@ -7,7 +7,7 @@ import { useTenant } from '@/lib/context/AuthContext.tsx';
 import { useWorkspace } from '@/lib/context/WorkspaceContext.tsx';
 import { Channel } from '@/src/types.ts';
 import { api } from '@/src/lib/api.ts';
-import { Building2, Compass, PlusCircle, AlertCircle, RefreshCw, MessageSquare } from 'lucide-react';
+import { Building2, Compass, PlusCircle, AlertCircle, RefreshCw, MessageSquare, ShieldAlert, Lock } from 'lucide-react';
 
 export default function ChannelDashboardPage() {
   const router = useRouter();
@@ -19,7 +19,7 @@ export default function ChannelDashboardPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState<string>(channelId);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{ message: string; statusCode: number } | null>(null);
 
   const verifiedWorkspace = activeCommunity || activeTenant;
   const hasMembership = Boolean(verifiedWorkspace?.id);
@@ -35,15 +35,27 @@ export default function ChannelDashboardPage() {
     setLoadError(null);
 
     try {
-      const data = await api.getChannels();
-      const channelList = Array.isArray(data) ? data : [];
-      setChannels(channelList);
-      if (channelList.length > 0 && !activeChannel) {
-        setActiveChannel(channelList[0].id);
+      const res = await api.getChannels();
+      if (res.status === 'success') {
+        setChannels(res.data);
+        if (res.data.length > 0 && !activeChannel) {
+          setActiveChannel(res.data[0].id);
+        }
+      } else if (res.status === 'empty') {
+        setChannels([]);
+      } else if (res.status === 'unauthorized') {
+        setLoadError({ message: res.error || 'Authentication required.', statusCode: 401 });
+        setChannels([]);
+      } else if (res.status === 'forbidden') {
+        setLoadError({ message: res.error || 'Access to channels in this workspace is restricted.', statusCode: 403 });
+        setChannels([]);
+      } else {
+        setLoadError({ message: res.error || 'Failed to load channels for this workspace.', statusCode: res.statusCode || 500 });
+        setChannels([]);
       }
     } catch (err: any) {
       console.error('[ChannelsPage] Failed to fetch channels:', err);
-      setLoadError(err?.message || 'Failed to load channels for this workspace.');
+      setLoadError({ message: err?.message || 'Network connection failed.', statusCode: 0 });
       setChannels([]);
     } finally {
       setIsLoading(false);
@@ -99,7 +111,51 @@ export default function ChannelDashboardPage() {
     );
   }
 
-  // Error State with Retry Button
+  // HTTP 401 Unauthorized State
+  if (loadError && loadError.statusCode === 401) {
+    return (
+      <div className="max-w-md mx-auto my-12 p-6 rounded-2xl bg-amber-950/20 border border-amber-500/30 text-center space-y-4">
+        <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto">
+          <Lock className="w-6 h-6" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-amber-200">Authentication Required</h3>
+          <p className="text-xs text-amber-300/80">{loadError.message}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push('/login')}
+          className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium inline-flex items-center gap-2 transition-colors cursor-pointer"
+        >
+          <span>Sign In</span>
+        </button>
+      </div>
+    );
+  }
+
+  // HTTP 403 Forbidden / Access-Restricted State
+  if (loadError && loadError.statusCode === 403) {
+    return (
+      <div className="max-w-md mx-auto my-12 p-6 rounded-2xl bg-slate-900/90 border border-slate-800 text-center space-y-4">
+        <div className="w-12 h-12 rounded-xl bg-slate-800 text-slate-300 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-6 h-6 text-amber-400" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-slate-200">Access Restricted</h3>
+          <p className="text-xs text-slate-400 max-w-xs mx-auto">{loadError.message}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push('/communities/explore')}
+          className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium inline-flex items-center gap-2 transition-colors cursor-pointer"
+        >
+          <span>Explore Other Workspaces</span>
+        </button>
+      </div>
+    );
+  }
+
+  // HTTP 500 / Network Error State with Retry Button
   if (loadError) {
     return (
       <div className="max-w-md mx-auto my-12 p-6 rounded-2xl bg-rose-950/20 border border-rose-500/30 text-center space-y-4">
@@ -108,7 +164,7 @@ export default function ChannelDashboardPage() {
         </div>
         <div className="space-y-1">
           <h3 className="text-sm font-semibold text-rose-200">Failed to load channels</h3>
-          <p className="text-xs text-rose-300/80">{loadError}</p>
+          <p className="text-xs text-rose-300/80">{loadError.message}</p>
         </div>
         <button
           type="button"
@@ -122,7 +178,7 @@ export default function ChannelDashboardPage() {
     );
   }
 
-  // Empty State when workspace has no channels created yet
+  // Empty State when workspace has no channels created yet (HTTP 200 with 0 channels)
   if (!isLoading && channels.length === 0) {
     return (
       <div className="max-w-md mx-auto my-16 p-8 text-center space-y-4 border border-dashed border-slate-800 rounded-2xl bg-slate-900/40">

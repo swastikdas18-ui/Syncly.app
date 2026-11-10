@@ -68,15 +68,57 @@ class SynclyApiClient {
   }
 
   // --- MEMBERSHIPS ---
-  public async getMemberships(): Promise<any[]> {
+  public async getMemberships(): Promise<{
+    status: 'success' | 'empty' | 'unauthorized' | 'forbidden' | 'error';
+    data: any[];
+    statusCode: number;
+    error?: string;
+  }> {
     try {
       const res = await fetch('/api/memberships', { headers: this.getHeaders() });
-      if (!res.ok) throw new Error('Failed to fetch memberships');
-      const json = await res.json();
-      return json.data || [];
-    } catch (e) {
-      console.warn('API getMemberships fallback:', e);
-      return [];
+      const json = await res.json().catch(() => ({}));
+
+      if (res.status === 200) {
+        const memberships = Array.isArray(json?.data) ? json.data : [];
+        return {
+          status: memberships.length > 0 ? 'success' : 'empty',
+          data: memberships,
+          statusCode: 200,
+        };
+      }
+
+      if (res.status === 401) {
+        return {
+          status: 'unauthorized',
+          data: [],
+          statusCode: 401,
+          error: json.error || 'Authentication required.',
+        };
+      }
+
+      if (res.status === 403) {
+        return {
+          status: 'forbidden',
+          data: [],
+          statusCode: 403,
+          error: json.error || 'Access forbidden.',
+        };
+      }
+
+      return {
+        status: 'error',
+        data: [],
+        statusCode: res.status,
+        error: json.error || `Server responded with HTTP ${res.status}`,
+      };
+    } catch (e: any) {
+      console.warn('API getMemberships network error:', e);
+      return {
+        status: 'error',
+        data: [],
+        statusCode: 0,
+        error: e?.message || 'Network connection failed.',
+      };
     }
   }
 
@@ -339,20 +381,58 @@ class SynclyApiClient {
   }
 
   // --- CHANNELS ---
-  public async getChannels(): Promise<Channel[]> {
+  public async getChannels(): Promise<{
+    status: 'success' | 'empty' | 'unauthorized' | 'forbidden' | 'error';
+    data: Channel[];
+    statusCode: number;
+    error?: string;
+  }> {
     try {
       const res = await fetch('/api/channels', { headers: this.getHeaders() });
-      if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json?.data) && json.data.length > 0) {
-          return json.data;
-        }
-      }
-    } catch (e) {
-      console.warn('API getChannels network fallback:', e);
-    }
+      const json = await res.json().catch(() => ({}));
 
-    return [];
+      if (res.status === 200) {
+        const channels = Array.isArray(json?.data) ? json.data : [];
+        return {
+          status: channels.length > 0 ? 'success' : 'empty',
+          data: channels,
+          statusCode: 200,
+        };
+      }
+
+      if (res.status === 401) {
+        return {
+          status: 'unauthorized',
+          data: [],
+          statusCode: 401,
+          error: json.error || 'Authentication required.',
+        };
+      }
+
+      if (res.status === 403) {
+        return {
+          status: 'forbidden',
+          data: [],
+          statusCode: 403,
+          error: json.error || 'Access to channels in this workspace is restricted.',
+        };
+      }
+
+      return {
+        status: 'error',
+        data: [],
+        statusCode: res.status,
+        error: json.error || `Server responded with HTTP ${res.status}`,
+      };
+    } catch (e: any) {
+      console.warn('API getChannels network error:', e);
+      return {
+        status: 'error',
+        data: [],
+        statusCode: 0,
+        error: e?.message || 'Network connection failed.',
+      };
+    }
   }
 
   public async createChannel(payload: { id?: string; name: string; description?: string; isPrivate?: boolean }): Promise<Channel | null> {

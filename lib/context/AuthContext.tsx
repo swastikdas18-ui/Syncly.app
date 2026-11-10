@@ -209,38 +209,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchProfileAndTenant, activeTenant?.id, clearStaleWorkspaceStorage]);
 
-  // Listen to workspace-changed events
+  // Listen to workspace-changed events: REVALIDATE with database memberships rather than blindly adopting localStorage
   useEffect(() => {
-    const handleWorkspaceChanged = () => {
-      try {
-        const storedWorkspace = localStorage.getItem('syncly_workspace');
-        if (storedWorkspace) {
-          const parsed = JSON.parse(storedWorkspace);
-          if (parsed?.id) {
-            setActiveTenantState({
-              id: parsed.id,
-              name: parsed.name || 'Workspace',
-              slug: parsed.slug || 'workspace',
-              created_at: new Date().toISOString(),
-            });
-            if (session) {
-              setSession({
-                ...session,
-                user: {
-                  ...session.user,
-                  tenantId: parsed.id,
-                  role: parsed.role || session.user.role,
-                },
-              });
-            }
-          }
-        }
-      } catch { }
+    const handleWorkspaceChanged = async () => {
+      if (session?.user?.id) {
+        // Re-verify against live public.memberships table rather than trusting localStorage
+        await fetchProfileAndTenant(session.user.id);
+      }
     };
 
     window.addEventListener('workspace-changed', handleWorkspaceChanged);
     return () => window.removeEventListener('workspace-changed', handleWorkspaceChanged);
-  }, [session]);
+  }, [session?.user?.id, fetchProfileAndTenant]);
 
   useEffect(() => {
     refreshSession();
