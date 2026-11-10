@@ -84,21 +84,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select('community_id, role')
         .eq('user_id', userId);
 
-      // Handle database query error explicitly
+      // Handle database query error explicitly:
+      // Keep profile and session intact, set membershipStatus to 'error', do NOT wipe activeTenant or call clearStaleWorkspaceStorage
       if (memErr) {
         console.error('[AuthContext] Membership query failed:', memErr);
         setMembershipStatus('error');
         setMembershipError(memErr.message || 'Failed to query memberships.');
-        // Do not alter activeTenant if it was previously set; fail safe
-        setActiveTenantState(null);
         return;
       }
 
       const memberships = (membershipsData as Array<{ community_id: string; role: string }>) || [];
 
-      // 3. User has ZERO memberships
+      // 3. User has ZERO memberships (legitimate empty state)
       if (memberships.length === 0) {
         setMembershipStatus('empty');
+        setMembershipError(null);
         setActiveTenantState(null);
         clearStaleWorkspaceStorage();
         return;
@@ -106,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // 4. Resolve active tenant strictly from verified memberships
       setMembershipStatus('success');
+      setMembershipError(null);
       let selectedCommunityId: string | null = null;
 
       if (preferredTenantId) {
@@ -147,7 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('[AuthContext] Error in fetchProfileAndTenant:', err);
       setMembershipStatus('error');
       setMembershipError(err?.message || 'Unexpected membership error.');
-      setActiveTenantState(null);
+      // Keep session intact; do not wipe or clear storage on transient failure
     }
   }, [clearStaleWorkspaceStorage]);
 
@@ -159,6 +160,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const retryMembershipFetch = useCallback(async () => {
     if (session?.user?.id) {
+      setMembershipStatus('loading');
+      setMembershipError(null);
       await fetchProfileAndTenant(session.user.id, activeTenant?.id);
     }
   }, [session?.user?.id, activeTenant?.id, fetchProfileAndTenant]);
@@ -196,14 +199,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
         setActiveTenantState(null);
         setMembershipStatus('idle');
+        setMembershipError(null);
         clearStaleWorkspaceStorage();
       }
-    } catch {
-      setSession(null);
-      setProfile(null);
-      setActiveTenantState(null);
-      setMembershipStatus('idle');
-      clearStaleWorkspaceStorage();
+    } catch (err: any) {
+      console.error('[AuthContext] refreshSession caught error:', err);
+      // Only clear session if getSession failed completely or unauthenticated
+      setMembershipStatus('error');
+      setMembershipError(err?.message || 'Failed to refresh session.');
     } finally {
       setIsLoading(false);
     }

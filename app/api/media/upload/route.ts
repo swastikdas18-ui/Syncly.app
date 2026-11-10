@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // Sanitize filename
     const originalName = file.name || 'attachment.png';
-    const sanitized = originalName.replace(/[^a-zA-Z0-9\._-]/g, '_');
+    const sanitized = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
     const objectKey = `${effectiveTenantId}/posts/${crypto.randomUUID()}_${sanitized}`;
 
     // Verify tenant folder partitioning matches RLS policy:

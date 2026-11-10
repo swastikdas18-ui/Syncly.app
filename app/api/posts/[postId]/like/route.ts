@@ -92,7 +92,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   );
 
   if (!isTableMissing && !reactionQueryErr) {
-    let hasLiked = false;
+    let hasLiked: boolean;
     const adminClient = createAdminClient();
 
     if (desiredAction === 'like') {

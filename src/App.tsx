@@ -1,3 +1,15 @@
+/**
+ * LEGACY PROTOTYPE SPA: WorkConnectHub
+ * 
+ * ISOLATION NOTICE:
+ * This component is an archived single-page application prototype retained strictly
+ * for offline component testing and code explorer demonstrations.
+ * 
+ * It is NOT mounted in the Next.js App Router production application (which routes
+ * through app/(auth) and app/(dashboard) with AuthProvider and WorkspaceProvider).
+ * It MUST NOT be used to authenticate production users or persist production session state.
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar, MainViewType } from './components/Navbar.tsx';
 import { PostFeed } from './components/PostFeed.tsx';
