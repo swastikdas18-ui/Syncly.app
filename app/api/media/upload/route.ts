@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { handleAuthErrors } from '@/lib/auth/guard.ts';
 
 /**
  * POST /api/media/upload
@@ -11,11 +11,12 @@ import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 export async function POST(request: NextRequest) {
   // SECURITY: Require cryptographically verified authentication
   const auth = await getVerifiedAuthContext(request);
-  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
-    return NextResponse.json({ error: 'Unauthorized. Cryptographically verified authentication required.' }, { status: 401 });
+  const authError = handleAuthErrors(auth, { requireWorkspace: true });
+  if (authError) {
+    return authError;
   }
 
-  const effectiveTenantId = auth.activeTenantId;
+  const effectiveTenantId = auth.activeTenantId!;
 
   // Strict cross-tenant check against verified identity
   const rawHeaderTenant = request.headers.get('x-tenant-id');
@@ -50,8 +51,8 @@ export async function POST(request: NextRequest) {
       'image/gif',
       'image/webp',
       'application/pdf',
-      'text/plain',
     ];
+
     if (file.type && !ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
         { error: `File type '${file.type}' is not permitted.` },
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     // Sanitize filename
     const originalName = file.name || 'attachment.png';
-    const sanitized = originalName.replace(/[^a-zA-Z0-9\._-]/g, '_');
+    const sanitized = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
     const objectKey = `${effectiveTenantId}/posts/${crypto.randomUUID()}_${sanitized}`;
 
     // Verify tenant folder partitioning matches RLS policy:
@@ -82,8 +83,6 @@ export async function POST(request: NextRequest) {
         type: file.type,
         isPartitionValid,
         isPrivate: true,
-        rlsPolicyCheck: 'PASSED (Tenant folder matches session context; bucket is private)',
-        rlsContextSql: buildTenantSessionSql(effectiveTenantId),
       },
       { status: 201 }
     );

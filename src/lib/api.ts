@@ -1,26 +1,29 @@
 import { Post, Channel, ChatMessage, Tenant, PostComment, IsolationAuditResult, PostCategory, PresenceUser } from '../types.ts';
-import { DEFAULT_TENANT_ID, resolveTenantId } from './tenantContext.ts';
+import { resolveTenantId } from './tenantContext.ts';
 
 class SynclyApiClient {
-  private currentTenantId: string = "";
+  private currentTenantId: string | null = null;
   private sseSource: EventSource | null = null;
   private pollingTimer: any = null;
   private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
 
-  public setTenantId(tenantId: string) {
+  public setTenantId(tenantId: string | null) {
     this.currentTenantId = resolveTenantId(tenantId);
     this.reconnectSse();
   }
 
-  public getTenantId(): string {
+  public getTenantId(): string | null {
     return this.currentTenantId;
   }
 
   private getHeaders(): HeadersInit {
-    return {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-tenant-id': this.currentTenantId,
     };
+    if (this.currentTenantId) {
+      headers['x-tenant-id'] = this.currentTenantId;
+    }
+    return headers;
   }
 
   // --- TENANTS & COMMUNITIES ---
@@ -65,15 +68,57 @@ class SynclyApiClient {
   }
 
   // --- MEMBERSHIPS ---
-  public async getMemberships(): Promise<any[]> {
+  public async getMemberships(): Promise<{
+    status: 'success' | 'empty' | 'unauthorized' | 'forbidden' | 'error';
+    data: any[];
+    statusCode: number;
+    error?: string;
+  }> {
     try {
       const res = await fetch('/api/memberships', { headers: this.getHeaders() });
-      if (!res.ok) throw new Error('Failed to fetch memberships');
-      const json = await res.json();
-      return json.data || [];
-    } catch (e) {
-      console.warn('API getMemberships fallback:', e);
-      return [];
+      const json = await res.json().catch(() => ({}));
+
+      if (res.status === 200) {
+        const memberships = Array.isArray(json?.data) ? json.data : [];
+        return {
+          status: memberships.length > 0 ? 'success' : 'empty',
+          data: memberships,
+          statusCode: 200,
+        };
+      }
+
+      if (res.status === 401) {
+        return {
+          status: 'unauthorized',
+          data: [],
+          statusCode: 401,
+          error: json.error || 'Authentication required.',
+        };
+      }
+
+      if (res.status === 403) {
+        return {
+          status: 'forbidden',
+          data: [],
+          statusCode: 403,
+          error: json.error || 'Access forbidden.',
+        };
+      }
+
+      return {
+        status: 'error',
+        data: [],
+        statusCode: res.status,
+        error: json.error || `Server responded with HTTP ${res.status}`,
+      };
+    } catch (e: any) {
+      console.warn('API getMemberships network error:', e);
+      return {
+        status: 'error',
+        data: [],
+        statusCode: 0,
+        error: e?.message || 'Network connection failed.',
+      };
     }
   }
 
@@ -336,20 +381,58 @@ class SynclyApiClient {
   }
 
   // --- CHANNELS ---
-  public async getChannels(): Promise<Channel[]> {
+  public async getChannels(): Promise<{
+    status: 'success' | 'empty' | 'unauthorized' | 'forbidden' | 'error';
+    data: Channel[];
+    statusCode: number;
+    error?: string;
+  }> {
     try {
       const res = await fetch('/api/channels', { headers: this.getHeaders() });
-      if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json?.data) && json.data.length > 0) {
-          return json.data;
-        }
-      }
-    } catch (e) {
-      console.warn('API getChannels network fallback:', e);
-    }
+      const json = await res.json().catch(() => ({}));
 
-    return [];
+      if (res.status === 200) {
+        const channels = Array.isArray(json?.data) ? json.data : [];
+        return {
+          status: channels.length > 0 ? 'success' : 'empty',
+          data: channels,
+          statusCode: 200,
+        };
+      }
+
+      if (res.status === 401) {
+        return {
+          status: 'unauthorized',
+          data: [],
+          statusCode: 401,
+          error: json.error || 'Authentication required.',
+        };
+      }
+
+      if (res.status === 403) {
+        return {
+          status: 'forbidden',
+          data: [],
+          statusCode: 403,
+          error: json.error || 'Access to channels in this workspace is restricted.',
+        };
+      }
+
+      return {
+        status: 'error',
+        data: [],
+        statusCode: res.status,
+        error: json.error || `Server responded with HTTP ${res.status}`,
+      };
+    } catch (e: any) {
+      console.warn('API getChannels network error:', e);
+      return {
+        status: 'error',
+        data: [],
+        statusCode: 0,
+        error: e?.message || 'Network connection failed.',
+      };
+    }
   }
 
   public async createChannel(payload: { id?: string; name: string; description?: string; isPrivate?: boolean }): Promise<Channel | null> {
@@ -365,6 +448,64 @@ class SynclyApiClient {
     } catch (e) {
       console.error('API createChannel error:', e);
       return null;
+    }
+  }
+
+  // --- MEMBERSHIP & ROSTER ---
+  public async getWorkspaceMembers(tenantId?: string): Promise<{
+    status: 'success' | 'unauthorized' | 'forbidden' | 'server_error' | 'network_error';
+    data: any[];
+    statusCode: number;
+    error?: string;
+  }> {
+    try {
+      const headers = this.getHeaders();
+      if (tenantId) {
+        (headers as Record<string, string>)['x-tenant-id'] = tenantId;
+      }
+      const res = await fetch('/api/tenant/members', { headers });
+      const json = await res.json().catch(() => ({}));
+
+      if (res.status === 200) {
+        return {
+          status: 'success',
+          data: Array.isArray(json.data) ? json.data : [],
+          statusCode: 200,
+        };
+      }
+
+      if (res.status === 401) {
+        return {
+          status: 'unauthorized',
+          data: [],
+          statusCode: 401,
+          error: json.error || 'Authentication required.',
+        };
+      }
+
+      if (res.status === 403) {
+        return {
+          status: 'forbidden',
+          data: [],
+          statusCode: 403,
+          error: json.error || 'You do not hold an active membership in this workspace.',
+        };
+      }
+
+      return {
+        status: 'server_error',
+        data: [],
+        statusCode: res.status,
+        error: json.error || `Server responded with HTTP ${res.status}`,
+      };
+    } catch (e: any) {
+      console.warn('API getWorkspaceMembers network error:', e);
+      return {
+        status: 'network_error',
+        data: [],
+        statusCode: 0,
+        error: e?.message || 'Network connection failed.',
+      };
     }
   }
 
@@ -487,7 +628,14 @@ class SynclyApiClient {
   }
 
   private connectSse() {
-    if (!this.currentTenantId || !this.currentTenantId.includes("-")) return;
+    if (!this.currentTenantId) {
+      if (this.sseSource) {
+        this.sseSource.close();
+        this.sseSource = null;
+      }
+      this.stopPollingFallback();
+      return;
+    }
     if (typeof window === 'undefined') return;
 
     try {
@@ -501,7 +649,7 @@ class SynclyApiClient {
         return;
       }
 
-      const cleanTenant = (this.currentTenantId && this.currentTenantId.includes('-')) ? this.currentTenantId.trim() : '';
+      const cleanTenant = this.currentTenantId.trim();
       if (!cleanTenant) return;
       const params = new URLSearchParams({ tenantId: cleanTenant });
       const sseUrl = `/api/events/stream?${params.toString()}`;
@@ -543,8 +691,13 @@ class SynclyApiClient {
   }
 
   private startPollingFallback() {
+    if (!this.currentTenantId) return;
     if (this.pollingTimer) return;
     this.pollingTimer = setInterval(async () => {
+      if (!this.currentTenantId) {
+        this.stopPollingFallback();
+        return;
+      }
       try {
         await fetch(`/api/presence?tenantId=${encodeURIComponent(this.currentTenantId)}`, {
           headers: this.getHeaders(),
@@ -571,13 +724,14 @@ export const api = new SynclyApiClient();
 
 // ✅ Clean, strict URL construction
 export function subscribeToEventsStream(
-  tenantId: string = '00000000-0000-0000-0000-000000000001',
+  tenantId?: string | null,
   onMessage?: (data: any) => void
 ) {
   if (typeof window === 'undefined') return () => {};
+  if (!tenantId) return () => {};
 
   // 1. Sanitize tenant ID (strip whitespace and prevent non-UUID fallbacks)
-  const cleanTenant = (tenantId && tenantId.includes('-')) ? tenantId.trim() : '';
+  const cleanTenant = resolveTenantId(tenantId);
   if (!cleanTenant) return () => {};
 
   // 2. Build URL safely without manual string concatenation

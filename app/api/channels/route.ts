@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { handleAuthErrors } from '@/lib/auth/guard.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { Channel } from '@/src/types.ts';
 
@@ -7,14 +8,12 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
-  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
-    return NextResponse.json(
-      { error: 'Unauthorized. Valid Supabase session and active workspace membership required.' },
-      { status: 401 }
-    );
+  const authError = handleAuthErrors(auth, { requireWorkspace: true });
+  if (authError) {
+    return authError;
   }
 
-  const tenantId = auth.activeTenantId;
+  const tenantId = auth.activeTenantId!;
   const supabase = await createClient(request);
 
   const { data: dbChannels, error } = await (supabase.from('channels') as any)
@@ -45,14 +44,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
-  if (!auth.isAuthenticated || !auth.userId || !auth.activeTenantId) {
-    return NextResponse.json(
-      { error: 'Unauthorized. Valid Supabase session required.' },
-      { status: 401 }
-    );
+  const authError = handleAuthErrors(auth, { requireWorkspace: true });
+  if (authError) {
+    return authError;
   }
 
-  const tenantId = auth.activeTenantId;
+  const tenantId = auth.activeTenantId!;
 
   try {
     const body = await request.json();

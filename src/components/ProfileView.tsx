@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { 
-  User, Building2, Shield, Sparkles, Bell, Key, LogOut, 
-  CheckCircle2, RefreshCw, ExternalLink, Mail, Award, Laptop,
-  FileCode, FileCode2, ShieldCheck, Compass, Edit3, Check, X,
-  Camera, Upload, Loader2, AlertCircle, Save
+  Building2, ShieldCheck, Mail, LogOut, 
+  CheckCircle2, RefreshCw, Compass, Edit3, Check, X,
+  Camera, Loader2, AlertCircle, Save, PlusCircle
 } from 'lucide-react';
-import { UserSession, Tenant, Profile } from '../types.ts';
+import { UserSession, Tenant } from '../types.ts';
 import { api } from '../lib/api.ts';
 
 interface ProfileViewProps {
@@ -39,17 +38,16 @@ const ROLE_OPTIONS: Array<{
   desc: string;
   badgeClass: string;
 }> = [
-  { id: 'admin', label: 'Admin / Team Mentor', desc: 'Full workspace governance & channel moderation', badgeClass: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
-  { id: 'manager', label: 'Engineering Manager', desc: 'Team coordination, 1:1 syncs & project roadmaps', badgeClass: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
-  { id: 'employee', label: 'Staff / Core Employee', desc: 'Direct access to channels, feed updates & discussions', badgeClass: 'bg-blue-500/10 text-indigo-400 border-indigo-500/20' },
-  { id: 'intern', label: 'Intern Cohort', desc: 'Dedicated intern channels, mentorship & learning hub', badgeClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  { id: 'owner', label: 'Workspace Owner', desc: 'Primary administrative tenant lead & settings management', badgeClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  { id: 'admin', label: 'Admin', desc: 'Full workspace governance & channel moderation', badgeClass: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+  { id: 'manager', label: 'Manager', desc: 'Team coordination & project management', badgeClass: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
+  { id: 'employee', label: 'Employee', desc: 'Direct access to channels, feed updates & discussions', badgeClass: 'bg-blue-500/10 text-indigo-400 border-indigo-500/20' },
+  { id: 'intern', label: 'Intern', desc: 'Cohort channels & team syncs', badgeClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  { id: 'owner', label: 'Owner', desc: 'Primary administrative workspace lead', badgeClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
 ];
 
 export function ProfileView({
   session,
   currentTenant,
-  onSwitchPersona,
   onRestartOnboarding,
   onLogout,
   onSelectView,
@@ -57,7 +55,7 @@ export function ProfileView({
 }: ProfileViewProps) {
   const user = session?.user || {
     id: '',
-    email: 'member@company.internal',
+    email: '',
     fullName: 'Corporate Member',
     headline: 'Workspace Member',
     role: 'employee' as const,
@@ -70,7 +68,6 @@ export function ProfileView({
   const [fullName, setFullName] = useState(user.fullName);
   const [headline, setHeadline] = useState(user.headline || '');
   const [email, setEmail] = useState(user.email);
-  const [role, setRole] = useState<'owner' | 'admin' | 'manager' | 'employee' | 'intern'>(user.role);
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl || AVATAR_PRESETS[0]);
   const [customAvatarInput, setCustomAvatarInput] = useState('');
   
@@ -85,7 +82,6 @@ export function ProfileView({
       setFullName(user.fullName);
       setHeadline(user.headline || '');
       setEmail(user.email);
-      setRole(user.role);
       setAvatarUrl(user.avatarUrl || AVATAR_PRESETS[0]);
     }
   }, [user, isEditing]);
@@ -95,7 +91,7 @@ export function ProfileView({
     const cls = found ? found.badgeClass : 'bg-blue-500/10 text-indigo-400 border-indigo-500/20';
     const label = found ? found.label : r;
     return (
-      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${cls}`}>
+      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border capitalize ${cls}`}>
         {label}
       </span>
     );
@@ -119,12 +115,6 @@ export function ProfileView({
     }
   };
 
-  const handleGenerateDicebear = () => {
-    const seed = encodeURIComponent(fullName.trim() || 'User');
-    const generated = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
-    setAvatarUrl(generated);
-  };
-
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) {
@@ -144,7 +134,6 @@ export function ProfileView({
       fullName: fullName.trim(),
       headline: headline.trim(),
       email: email.trim(),
-      role,
       avatarUrl,
     };
 
@@ -165,11 +154,12 @@ export function ProfileView({
     setFullName(user.fullName);
     setHeadline(user.headline || '');
     setEmail(user.email);
-    setRole(user.role);
     setAvatarUrl(user.avatarUrl || AVATAR_PRESETS[0]);
     setErrorMessage(null);
     setIsEditing(false);
   };
+
+  const hasConnectedWorkspace = Boolean(currentTenant?.id && currentTenant?.name);
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-4 sm:space-y-6">
@@ -191,7 +181,7 @@ export function ProfileView({
         </div>
       )}
 
-      {/* Main Identity Header Card */}
+      {/* 1. Personal Information Header Card */}
       <div className="p-4 sm:p-6 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl backdrop-blur-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -210,17 +200,13 @@ export function ProfileView({
             <div className="flex-1 text-center sm:text-left space-y-1">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">{user.fullName}</h2>
-                {getRoleBadge(user.role)}
+                {hasConnectedWorkspace && getRoleBadge(user.role)}
               </div>
               <p className="text-xs text-slate-400 font-medium">{user.headline || 'Enterprise Team Member'}</p>
               <div className="flex items-center justify-center sm:justify-start gap-3 pt-1 text-xs text-slate-500 flex-wrap">
                 <span className="flex items-center gap-1 truncate max-w-xs">
                   <Mail className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">{user.email}</span>
-                </span>
-                <span>•</span>
-                <span className="flex items-center gap-1 font-mono text-[11px]">
-                  ID: {user.id.slice(0, 8)}...
                 </span>
               </div>
             </div>
@@ -284,7 +270,6 @@ export function ProfileView({
               </label>
               
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
-                {/* Current Avatar Preview */}
                 <div className="relative shrink-0">
                   <img
                     src={avatarUrl}
@@ -299,14 +284,13 @@ export function ProfileView({
                 </div>
 
                 <div className="flex-1 space-y-2 text-center sm:text-left">
-                  {/* Preset chips */}
                   <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
                     {AVATAR_PRESETS.map((url, i) => (
                       <button
                         key={i}
                         type="button"
                         onClick={() => setAvatarUrl(url)}
-                        className={`relative w-8 h-8 rounded-lg overflow-hidden border-2 transition-all ${
+                        className={`relative w-8 h-8 rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
                           avatarUrl === url ? 'border-indigo-500 ring-2 ring-blue-400/40 scale-105' : 'border-slate-700 opacity-60 hover:opacity-100'
                         }`}
                       >
@@ -318,16 +302,6 @@ export function ProfileView({
                         )}
                       </button>
                     ))}
-                    
-                    <button
-                      type="button"
-                      onClick={handleGenerateDicebear}
-                      className="px-2.5 py-1 text-[11px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1 transition-colors"
-                      title="Generate illustrated avatar from name"
-                    >
-                      <Sparkles className="w-3 h-3 text-amber-400" />
-                      <span>DiceBear</span>
-                    </button>
 
                     <label className="px-2.5 py-1 text-[11px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1 cursor-pointer transition-colors">
                       <Camera className="w-3 h-3 text-indigo-400" />
@@ -341,7 +315,6 @@ export function ProfileView({
                     </label>
                   </div>
 
-                  {/* Or Custom URL Input */}
                   <div className="flex items-center gap-2 max-w-md">
                     <input
                       type="url"
@@ -358,7 +331,7 @@ export function ProfileView({
                           setCustomAvatarInput('');
                         }
                       }}
-                      className="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700"
+                      className="px-2.5 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 cursor-pointer"
                     >
                       Apply
                     </button>
@@ -391,7 +364,7 @@ export function ProfileView({
                   type="text"
                   value={headline}
                   onChange={(e) => setHeadline(e.target.value)}
-                  placeholder="e.g. VP of Engineering & Team Mentor"
+                  placeholder="e.g. Senior Software Engineer"
                   className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl bg-slate-950/90 border border-slate-800 text-slate-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
                 />
               </div>
@@ -409,42 +382,25 @@ export function ProfileView({
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@company.internal"
+                  placeholder="name@company.com"
                   className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm font-mono rounded-xl bg-slate-950/90 border border-slate-800 text-slate-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
                 />
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Used to verify automatic corporate domain matching in community discovery.
-              </p>
             </div>
 
-            {/* ROLE SELECTOR */}
+            {/* ROLE (AUTHORITATIVE READ-ONLY DISPLAY) */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Workspace Role &amp; Permissions
+                Workspace Role & Permissions
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                {ROLE_OPTIONS.map((opt) => {
-                  const isSelected = role === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setRole(opt.id)}
-                      className={`p-2.5 rounded-xl border text-left transition-all ${
-                        isSelected
-                          ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-xs'
-                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold">{opt.label}</span>
-                        {isSelected && <Check className="w-3.5 h-3.5 text-indigo-400" />}
-                      </div>
-                      <p className="text-[10px] text-slate-400 line-clamp-2 mt-0.5">{opt.desc}</p>
-                    </button>
-                  );
-                })}
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs font-bold text-slate-200 capitalize">{user.role}</span>
+                </div>
+                <span className="text-[11px] text-slate-500 font-medium">
+                  Assigned by workspace administration
+                </span>
               </div>
             </div>
 
@@ -454,7 +410,7 @@ export function ProfileView({
                 type="button"
                 onClick={handleCancelEdit}
                 disabled={isSaving}
-                className="px-3.5 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-xl transition-colors"
+                className="px-3.5 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -480,156 +436,92 @@ export function ProfileView({
         )}
       </div>
 
-      {/* Workspace & Isolation Details */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Organization Card */}
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-md space-y-3">
+      {/* 2. Workspace Membership Section */}
+      {hasConnectedWorkspace ? (
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-md space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <Building2 className="w-4 h-4 text-indigo-400" />
-              Current Organization
+              Connected Workspace
             </span>
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              RLS Active
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Active Member
             </span>
           </div>
 
-          <div>
-            <div className="text-base font-bold text-slate-100">{currentTenant?.name || 'Workspace'}</div>
-            <div className="text-xs text-slate-400 mt-0.5">{currentTenant?.tagline || 'Team Community'}</div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <div>
+              <div className="text-base font-bold text-slate-100">{currentTenant?.name}</div>
+              <div className="text-xs text-slate-400 mt-0.5">{currentTenant?.tagline || 'Corporate Workspace'}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-medium">Your Role:</span>
+              {getRoleBadge(user.role)}
+            </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-800/80 space-y-1 text-xs font-mono">
-            <div className="text-slate-500">Tenant Slug: <span className="text-slate-300">{currentTenant?.slug || 'acme-corp'}</span></div>
-            <div className="text-slate-500 truncate">Tenant UUID: <span className="text-slate-300">{currentTenant?.id || '00000000-0000-0000-0000-000000000001'}</span></div>
-          </div>
-
-          <div className="pt-2">
+          <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
             <button
               type="button"
-              onClick={() => onSelectView?.('explore')}
-              className="w-full py-2 px-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-blue-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              onClick={() => onSelectView?.('communities/explore')}
+              className="py-2 px-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Compass className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Explore Other Workspaces</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* NO MEMBERSHIP STATE */
+        <div className="p-6 rounded-2xl bg-slate-900/40 border border-dashed border-slate-800 text-center space-y-3">
+          <div className="w-10 h-10 rounded-xl bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+            <Building2 className="w-5 h-5" />
+          </div>
+          <h3 className="text-sm font-semibold text-slate-200">No Workspace Connected</h3>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+            You haven&apos;t joined an organization yet. Explore available workspaces or create your own to collaborate with colleagues.
+          </p>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => onSelectView?.('communities/explore')}
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Compass className="w-3.5 h-3.5" />
-              <span>Browse &amp; Explore Other Communities</span>
+              <span>Explore Workspaces</span>
             </button>
-          </div>
-        </div>
-
-        {/* Security & RLS Context */}
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-md space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Shield className="w-4 h-4 text-indigo-400" />
-              Security &amp; Multi-Tenancy
-            </span>
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-blue-500/10 text-indigo-400 border border-indigo-500/20">
-              Postgres RLS
-            </span>
-          </div>
-
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Data access is strictly gated at the database layer. Cross-tenant leakage is blocked by row-level policies checking session claims.
-          </p>
-
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-            <span>22P02 UUID Safety</span>
-            <span className="text-emerald-400 font-semibold flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Enforced
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Authenticated Session & Security Details */}
-      <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-md space-y-4">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            Authenticated Session &amp; Tenant Partitioning
-          </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Cryptographic identity claims bound directly to PostgreSQL Row-Level Security policies.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/60 text-left">
-            <div className="text-xs font-bold text-slate-200 flex items-center justify-between">
-              Auth Provider
-              <span className="text-[10px] text-emerald-400 font-mono">ACTIVE</span>
-            </div>
-            <div className="text-[11px] text-slate-400 mt-1 font-mono truncate">Supabase Auth</div>
-          </div>
-
-          <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/60 text-left">
-            <div className="text-xs font-bold text-slate-200 flex items-center justify-between">
-              Role Authority
-              <span className="text-[10px] text-indigo-400 font-mono uppercase">{user.role}</span>
-            </div>
-            <div className="text-[11px] text-slate-400 mt-1 font-mono truncate">public.profiles.role</div>
-          </div>
-
-          <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/60 text-left">
-            <div className="text-xs font-bold text-slate-200 flex items-center justify-between">
-              Tenant Boundary
-              <span className="text-[10px] text-purple-400 font-mono">RLS Gated</span>
-            </div>
-            <div className="text-[11px] text-slate-400 mt-1 font-mono truncate">{currentTenant?.slug || 'workspace'}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Developer & Architecture Tools */}
-      {onSelectView && (
-        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-md space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Laptop className="w-4 h-4 text-indigo-400" />
-              Developer &amp; Architecture Tools
-            </span>
-            <span className="text-[11px] text-slate-500 font-mono">Mobile-Friendly</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
             <button
               type="button"
-              onClick={() => onSelectView('nextjs')}
-              className="p-3 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 hover:border-indigo-500/50 text-left transition-all group cursor-pointer"
+              onClick={() => onSelectView?.('communities/new')}
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              <div className="flex items-center gap-2 mb-1">
-                <FileCode className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs font-semibold text-slate-200 group-hover:text-blue-300">Next.js 15</span>
-              </div>
-              <p className="text-[11px] text-slate-400 line-clamp-2">App Router, Route Handlers &amp; Middleware</p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onSelectView('inspector')}
-              className="p-3 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 hover:border-emerald-500/50 text-left transition-all group cursor-pointer"
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span className="text-xs font-semibold text-slate-200 group-hover:text-emerald-300">RLS Leak Audit</span>
-              </div>
-              <p className="text-[11px] text-slate-400 line-clamp-2">Test cross-tenant partition security</p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onSelectView('schema')}
-              className="p-3 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 hover:border-indigo-500/50 text-left transition-all group cursor-pointer"
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <FileCode2 className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs font-semibold text-slate-200 group-hover:text-indigo-300">SQL Migration</span>
-              </div>
-              <p className="text-[11px] text-slate-400 line-clamp-2">Supabase DDL with strict RLS policies</p>
+              <PlusCircle className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Create Workspace</span>
             </button>
           </div>
         </div>
       )}
+
+      {/* 3. Account Settings */}
+      <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-md space-y-3">
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          Account Settings
+        </h3>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
+          <div>
+            <div className="text-xs font-medium text-slate-200">Password &amp; Security</div>
+            <div className="text-[11px] text-slate-500">Reset your login credentials securely</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onSelectView?.('forgot-password')}
+            className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-colors cursor-pointer"
+          >
+            Reset Password
+          </button>
+        </div>
+      </div>
+
     </div>
   );
 }

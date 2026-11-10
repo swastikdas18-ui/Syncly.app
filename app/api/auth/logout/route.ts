@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { Database } from '@/types/database.ts';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://syncly-demo-workspace.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.syncly_anon_placeholder_key';
+import { getSupabaseConfig } from '@/lib/supabase/config.ts';
 
 /**
  * POST /api/auth/logout
@@ -14,6 +12,7 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGci
  * 2. Purges all session and tenant cookies by setting Max-Age=0.
  */
 export async function POST(request: NextRequest) {
+  const { url, anonKey } = getSupabaseConfig();
   const response = NextResponse.json({
     success: true,
     message: 'Logged out successfully. Session invalidated.',
@@ -21,8 +20,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = createServerClient<Database>(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY,
+      url,
+      anonKey,
       {
         cookies: {
           getAll() {
@@ -48,32 +47,14 @@ export async function POST(request: NextRequest) {
   }
 
   // Explicitly clear all legacy & standard session cookies
-  const cookiesToClear = [
-    'syncly_auth_token',
-    'syncly_session',
-    'active_tenant_id',
-    'active_community_id',
-    'x-tenant-id',
-    'syncly_role',
-  ];
-
-  for (const cookieName of cookiesToClear) {
-    response.cookies.set(cookieName, '', {
-      path: '/',
-      maxAge: 0,
-    });
-  }
-
-  // Also purge all Supabase Auth session cookies (matching sb-*-auth-token)
-  for (const cookie of request.cookies.getAll()) {
-    if (cookie.name.startsWith('sb-') && cookie.name.includes('-auth-token')) {
-      response.cookies.set(cookie.name, '', {
-        path: '/',
-        maxAge: 0,
-      });
-    }
-  }
+  response.cookies.set('sb-access-token', '', { path: '/', maxAge: 0 });
+  response.cookies.set('sb-refresh-token', '', { path: '/', maxAge: 0 });
+  response.cookies.set('supabase-auth-token', '', { path: '/', maxAge: 0 });
+  response.cookies.set('active_tenant_id', '', { path: '/', maxAge: 0 });
+  response.cookies.set('active_community_id', '', { path: '/', maxAge: 0 });
+  response.cookies.set('x-tenant-id', '', { path: '/', maxAge: 0 });
+  response.cookies.set('syncly_role', '', { path: '/', maxAge: 0 });
+  response.cookies.set('syncly_token', '', { path: '/', maxAge: 0 });
 
   return response;
 }
-

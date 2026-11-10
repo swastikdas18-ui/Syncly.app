@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
-import { buildTenantSessionSql } from '@/lib/tenant/context.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 
 /**
@@ -10,9 +9,23 @@ import { createClient } from '@/lib/supabase/server.ts';
 export async function GET(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
   if (!auth.isAuthenticated || !auth.userId) {
+    if (auth.error && auth.error.startsWith('Forbidden.')) {
+      return NextResponse.json({ error: auth.error }, { status: 403 });
+    }
+    if (auth.error && auth.error.startsWith('Bad Request.')) {
+      return NextResponse.json({ error: auth.error }, { status: 400 });
+    }
     return NextResponse.json(
-      { error: 'Unauthorized. Valid Supabase session required.' },
+      { error: auth.error || 'Unauthorized. Valid Supabase session required.' },
       { status: 401 }
+    );
+  }
+
+  // Handle membership query failure explicitly (fail closed with 503)
+  if (auth.membershipStatus === 'error') {
+    return NextResponse.json(
+      { error: 'Membership verification service temporarily unavailable.' },
+      { status: 503 }
     );
   }
 
@@ -27,7 +40,6 @@ export async function GET(request: NextRequest) {
     },
     profile: auth.profile,
     memberships: auth.memberships,
-    rlsContextSql: buildTenantSessionSql(auth.activeTenantId),
   });
 }
 
@@ -41,31 +53,74 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await getVerifiedAuthContext(request);
   if (!auth.isAuthenticated || !auth.userId) {
+    if (auth.error && auth.error.startsWith('Forbidden.')) {
+      return NextResponse.json({ error: auth.error }, { status: 403 });
+    }
+    if (auth.error && auth.error.startsWith('Bad Request.')) {
+      return NextResponse.json({ error: auth.error }, { status: 400 });
+    }
     return NextResponse.json(
-      { error: 'Unauthorized. Valid Supabase session required.' },
+      { error: auth.error || 'Unauthorized. Valid Supabase session required.' },
       { status: 401 }
     );
   }
 
-  try {
-    const body = await request.json().catch(() => ({}));
-    const { fullName, avatarUrl } = body;
+  // Handle membership query failure explicitly (fail closed with 503)
+  if (auth.membershipStatus === 'error') {
+    return NextResponse.json(
+      { error: 'Membership verification service temporarily unavailable.' },
+      { status: 503 }
+    );
+  }
 
+  try {
+    const body = await request.json();
+
+    // Whitelist permitted self-service fields
+    const updatePayload: Record<string, any> = {};
+
+    if (body.fullName !== undefined) {
+      if (typeof body.fullName !== 'string' || body.fullName.trim().length === 0) {
+        return NextResponse.json(
+          { error: 'Full name cannot be empty.' },
+          { status: 400 }
+        );
+      }
+      updatePayload.full_name = body.fullName.trim();
+    }
+
+    if (body.avatarUrl !== undefined) {
+      if (body.avatarUrl && !body.avatarUrl.startsWith('http://') && !body.avatarUrl.startsWith('https://')) {
+        return NextResponse.json(
+          { error: 'Avatar URL must use http or https scheme.' },
+          { status: 400 }
+        );
+      }
+      updatePayload.avatar_url = body.avatarUrl;
+    }
+
+    // Role/tenant escalation prevention: ignore client role or tenant modifications
     const supabase = await createClient(request);
 
-    // Update public.profiles in database for the authenticated user only
-    const updatePayload: { full_name?: string; avatar_url?: string } = {};
-    if (typeof fullName === 'string' && fullName.trim()) {
-      updatePayload.full_name = fullName.trim();
-    }
-    if (typeof avatarUrl === 'string') {
-      updatePayload.avatar_url = avatarUrl.trim();
-    }
-
     if (Object.keys(updatePayload).length > 0) {
-      await (supabase.from('profiles') as any)
+      const { error: updateError } = await (supabase.from('profiles') as any)
         .update(updatePayload)
         .eq('id', auth.userId);
+
+      if (updateError) {
+        console.error('[API /api/profile] Database update failure:', {
+          code: updateError.code,
+          message: updateError.message,
+          userId: auth.userId ? `${auth.userId.slice(0, 8)}...` : undefined
+        });
+
+        return NextResponse.json(
+          {
+            error: 'Database error occurred while updating profile.',
+          },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({
@@ -79,9 +134,11 @@ export async function PATCH(request: NextRequest) {
         tenantId: auth.activeTenantId,
       },
       message: 'Profile updated successfully. Role modifications are restricted to workspace administrators.',
-      rlsContextSql: buildTenantSessionSql(auth.activeTenantId),
     });
-  } catch {
-    return NextResponse.json({ error: 'Malformed payload.' }, { status: 400 });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || 'Malformed payload.' },
+      { status: 400 }
+    );
   }
 }

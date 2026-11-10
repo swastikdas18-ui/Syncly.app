@@ -1,3 +1,15 @@
+/**
+ * LEGACY PROTOTYPE SPA: WorkConnectHub
+ * 
+ * ISOLATION NOTICE:
+ * This component is an archived single-page application prototype retained strictly
+ * for offline component testing and code explorer demonstrations.
+ * 
+ * It is NOT mounted in the Next.js App Router production application (which routes
+ * through app/(auth) and app/(dashboard) with AuthProvider and WorkspaceProvider).
+ * It MUST NOT be used to authenticate production users or persist production session state.
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar, MainViewType } from './components/Navbar.tsx';
 import { PostFeed } from './components/PostFeed.tsx';
@@ -16,12 +28,12 @@ import { JoinRequestsModal } from './components/JoinRequestsModal.tsx';
 import { BottomNav, BottomNavTab } from '../components/navigation/BottomNav.tsx';
 import { Tenant, Post, Channel, PostComment, UserSession } from './types.ts';
 import { api } from './lib/api.ts';
-import { DEFAULT_TENANT_ID, INITIAL_TENANTS } from './lib/tenantContext.ts';
+import { TEST_FIXTURE_DEFAULT_TENANT_ID, TEST_FIXTURE_TENANTS } from '../tests/fixtures/tenantFixtures.ts';
 
 export function WorkConnectHub() {
   const [isMounted, setIsMounted] = useState<boolean>(false);
-  const [tenants, setTenants] = useState<Tenant[]>(INITIAL_TENANTS);
-  const [activeTenant, setActiveTenant] = useState<Tenant>(INITIAL_TENANTS[0]);
+  const [tenants, setTenants] = useState<Tenant[]>(TEST_FIXTURE_TENANTS);
+  const [activeTenant, setActiveTenant] = useState<Tenant>(TEST_FIXTURE_TENANTS[0]);
   const [joinedCommunities, setJoinedCommunities] = useState<Array<Tenant & { userRole?: string; isMember?: boolean }>>([]);
   const [activeView, setActiveView] = useState<MainViewType>('feed');
   const [session, setSession] = useState<UserSession | null>(null);
@@ -92,13 +104,13 @@ export function WorkConnectHub() {
   const fetchMemberships = useCallback(async () => {
     try {
       const res = await api.getMemberships();
-      if (res && res.length > 0) {
+      if (res.status === 'success' && res.data.length > 0) {
         setJoinedCommunities(
-          res.map((m: any) => ({
+          res.data.map((m: any) => ({
             ...(m.community || {}),
             id: m.communityId,
-            name: m.community?.name || (m.communityId === INITIAL_TENANTS[0].id ? INITIAL_TENANTS[0].name : INITIAL_TENANTS[1].name),
-            slug: m.community?.slug || (m.communityId === INITIAL_TENANTS[0].id ? INITIAL_TENANTS[0].slug : INITIAL_TENANTS[1].slug),
+            name: m.community?.name || (m.communityId === TEST_FIXTURE_TENANTS[0].id ? TEST_FIXTURE_TENANTS[0].name : TEST_FIXTURE_TENANTS[1].name),
+            slug: m.community?.slug || (m.communityId === TEST_FIXTURE_TENANTS[0].id ? TEST_FIXTURE_TENANTS[0].slug : TEST_FIXTURE_TENANTS[1].slug),
             tagline: m.community?.tagline || '',
             logoUrl: m.community?.logoUrl,
             userRole: m.role || 'member',
@@ -136,9 +148,10 @@ export function WorkConnectHub() {
     ]);
 
     setPosts(fetchedPosts);
-    setChannels(fetchedChannels);
-    if (fetchedChannels.length > 0) {
-      setActiveChannelId(fetchedChannels[0].id);
+    const channelList = fetchedChannels.status === 'success' ? fetchedChannels.data : [];
+    setChannels(channelList);
+    if (channelList.length > 0) {
+      setActiveChannelId(channelList[0].id);
     }
   }, []);
 

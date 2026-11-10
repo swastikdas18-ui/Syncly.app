@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
-import { buildTenantSessionSql } from '@/lib/tenant/context.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { checkRateLimit } from '@/lib/rate-limit.ts';
 import { logAuditEvent } from '@/lib/audit.ts';
@@ -14,13 +13,27 @@ export async function POST(
   // 1. Enforce verified authentication
   const auth = await getVerifiedAuthContext(request);
   if (!auth.isAuthenticated || !auth.userId) {
+    if (auth.error && auth.error.startsWith('Forbidden.')) {
+      return NextResponse.json({ error: auth.error }, { status: 403 });
+    }
+    if (auth.error && auth.error.startsWith('Bad Request.')) {
+      return NextResponse.json({ error: auth.error }, { status: 400 });
+    }
     return NextResponse.json(
-      { error: 'Unauthorized. Valid Supabase session required.' },
+      { error: auth.error || 'Unauthorized. Valid Supabase session required.' },
       { status: 401 }
     );
   }
 
-  // 2. Reject suspended or inactive accounts
+  // 2. Reject if membership database query failed
+  if (auth.membershipStatus === 'error') {
+    return NextResponse.json(
+      { error: 'Membership verification service temporarily unavailable.' },
+      { status: 503 }
+    );
+  }
+
+  // 3. Reject suspended or inactive accounts
   if (auth.profile?.status && auth.profile.status !== 'active') {
     return NextResponse.json(
       { error: `Forbidden. Account status is '${auth.profile.status}'.` },
@@ -48,33 +61,26 @@ export async function POST(
     const { id: communityId, requestId } = await params;
 
     // Validate UUID formats
-    if (!communityId || !UUID_REGEX.test(communityId) || !requestId || !UUID_REGEX.test(requestId)) {
-      return NextResponse.json(
-        { error: 'Invalid community identifier or request identifier format.' },
-        { status: 400 }
-      );
+    if (!communityId || !UUID_REGEX.test(communityId)) {
+      return NextResponse.json({ error: 'Invalid community identifier.' }, { status: 400 });
+    }
+    if (!requestId || !UUID_REGEX.test(requestId)) {
+      return NextResponse.json({ error: 'Invalid request identifier.' }, { status: 400 });
     }
 
-    const body = await request.json().catch(() => ({}));
-    const { action } = body;
+    const body = await request.json();
+    const action = body.action; // 'approve' | 'reject'
 
-    // Validate action strictly against 'approve' and 'reject'
-    if (!action || !['approve', 'reject'].includes(action)) {
-      return NextResponse.json(
-        { error: 'Action must be "approve" or "reject".' },
-        { status: 400 }
-      );
+    if (!['approve', 'reject'].includes(action)) {
+      return NextResponse.json({ error: 'Action must be approve or reject.' }, { status: 400 });
     }
 
-    // 3. Authenticated Supabase Client
-    // Propagates authenticated user's JWT/session cookies directly to PostgreSQL
     const supabase = await createClient(request);
 
-    // 4. Delegate review atomically to PostgreSQL review_join_request function
-    // All authorization rules (reviewer identity via auth.uid(), target workspace ownership,
-    // active profile check, self-approval defense, row lock, conflict check, and role hardcoding)
-    // are enforced atomically inside the database engine.
-    const { data: rpcResult, error: rpcError } = await (supabase.rpc as any)('review_join_request', {
+    // Call atomic RPC: review_join_request(p_request_id, p_action)
+    // Canonical database signature in Migration 017: review_join_request(UUID, TEXT)
+    // Server-controlled role assignment inside the database procedure assigns 'member'.
+    const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('review_join_request', {
       p_request_id: requestId,
       p_action: action,
     });
@@ -94,27 +100,31 @@ export async function POST(
       );
     }
 
-    // Parse structured JSONB response from review_join_request
-    const result = (typeof rpcResult === 'string' ? JSON.parse(rpcResult) : rpcResult) || {};
+    const result = rpcData as {
+      success: boolean;
+      status?: number;
+      error?: string;
+      message?: string;
+      action?: string;
+      community_id?: string;
+      applicant_id?: string;
+      membership_id?: string;
+    };
 
-    if (!result.success) {
-      const statusCode = typeof result.status === 'number' ? result.status : 400;
+    if (!result || !result.success) {
+      const statusCode = typeof result?.status === 'number' ? result.status : 400;
       return NextResponse.json(
-        {
-          error: result.error || 'Failed to review join request.',
-          status: result.status,
-          success: false,
-        },
+        { error: result?.error || 'Review operation rejected by server.', status: result?.status },
         { status: statusCode }
       );
     }
 
-    // 5. Successful Execution - Record immutable audit log
+    // Record audit log
     await logAuditEvent({
+      action: `join_request_${result.action}`,
+      targetResource: `community_join_requests/${requestId}`,
       tenantId: result.community_id || communityId,
       actorId: auth.userId,
-      action: result.action === 'approve' ? 'join_request_approved' : 'join_request_rejected',
-      targetResource: `join_request:${requestId}`,
       metadata: {
         requestId,
         action: result.action,
@@ -123,15 +133,17 @@ export async function POST(
       },
     });
 
+    const resultAction = result.action || action;
+    const isApproved = resultAction === 'approve' || resultAction === 'approved';
+
     return NextResponse.json(
       {
         success: true,
         requestId,
         communityId: result.community_id || communityId,
-        status: result.action === 'approve' ? 'approved' : 'rejected',
+        status: isApproved ? 'approved' : 'rejected',
         membershipId: result.membership_id || null,
-        message: result.message || `Join request ${result.action} successfully.`,
-        rlsContextSql: buildTenantSessionSql(communityId),
+        message: result.message || `Join request ${resultAction} successfully.`,
       },
       { status: 200 }
     );

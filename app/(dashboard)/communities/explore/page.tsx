@@ -16,10 +16,11 @@ interface Community {
 
 export default function ExploreCommunitiesPage() {
   const router = useRouter();
-  const { allCommunities, activeCommunity, switchCommunity } = useWorkspace();
+  const { allCommunities, joinedCommunities, activeCommunity, switchCommunity } = useWorkspace();
   const { activeTenant } = useTenant();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   // Map real database workspaces
   const initialCommunities: Community[] = useMemo(() => {
@@ -34,20 +35,16 @@ export default function ExploreCommunitiesPage() {
   }, [allCommunities]);
 
   const activeWorkspaceId = activeTenant?.id || activeCommunity?.id || '';
+  const joinedIds = useMemo(() => new Set(joinedCommunities.map(c => c.id)), [joinedCommunities]);
 
-  const handleSelectWorkspace = (community: Community) => {
-    // 1. Switch context in WorkspaceContext
-    switchCommunity(community.id);
-
-    // 2. Persist in cookies for Next.js Edge Middleware
-    document.cookie = `active_tenant_id=${community.id}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `active_community_id=${community.id}; path=/; max-age=86400; SameSite=Lax`;
-    document.cookie = `x-tenant-id=${community.id}; path=/; max-age=86400; SameSite=Lax`;
-
-    window.dispatchEvent(new Event('workspace-changed'));
-
-    // 3. Route to /feed under chosen workspace
-    router.push('/feed');
+  const handleSelectWorkspace = async (community: Community) => {
+    setSwitchError(null);
+    const result = await switchCommunity(community.id);
+    if (result.success) {
+      router.push('/feed');
+    } else {
+      setSwitchError(result.error || 'Failed to switch workspace. Verified membership required.');
+    }
   };
 
   const filteredCommunities = useMemo(() => {
@@ -64,6 +61,19 @@ export default function ExploreCommunitiesPage() {
 
   return (
     <div className="space-y-6">
+      {switchError && (
+        <div className="p-3.5 bg-rose-950/20 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-center justify-between">
+          <span>{switchError}</span>
+          <button 
+            type="button" 
+            onClick={() => setSwitchError(null)} 
+            className="text-rose-400 hover:text-rose-200 font-bold ml-2"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <div className="relative">
         <input
           type="text"
@@ -82,6 +92,8 @@ export default function ExploreCommunitiesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredCommunities.map((community) => {
             const isCurrent = community.id === activeWorkspaceId;
+            const isEnrolled = joinedIds.has(community.id);
+
             return (
               <div
                 key={community.id}
@@ -109,13 +121,17 @@ export default function ExploreCommunitiesPage() {
                     <span className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
                       Active Workspace
                     </span>
-                  ) : (
+                  ) : isEnrolled ? (
                     <button
                       onClick={() => handleSelectWorkspace(community)}
                       className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
                     >
                       Switch to Workspace
                     </button>
+                  ) : (
+                    <span className="text-xs px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 font-medium">
+                      Not Enrolled
+                    </span>
                   )}
                 </div>
               </div>

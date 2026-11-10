@@ -240,8 +240,8 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
     const cleanName = user.fullName.replace(/\s*\(You\)/g, '').replace(/\s+/g, '_');
     const tag = `@${cleanName} `;
 
-    let newText = inputContent;
-    let newCursorPos = inputContent.length;
+    let newText: string;
+    let newCursorPos: number;
 
     if (mentionMatchRange) {
       const before = inputContent.slice(0, mentionMatchRange.start);

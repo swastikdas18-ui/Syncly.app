@@ -127,7 +127,7 @@ export function Header({
               </div>
               
               <span className="truncate max-w-[120px] sm:max-w-[150px]">
-                {activeCommunity?.name || 'Acme Corporation'}
+                {activeCommunity?.name || 'Select Workspace'}
               </span>
 
               {activeCommunity?.userRole && (
@@ -167,13 +167,12 @@ export function Header({
                           key={c.id}
                           type="button"
                           role="menuitem"
-                          onClick={() => {
-                            switchCommunity(c.id);
-                            document.cookie = `active_tenant_id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
-                            document.cookie = `active_community_id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
-                            document.cookie = `x-tenant-id=${c.id}; path=/; max-age=86400; SameSite=Lax`;
+                          onClick={async () => {
                             setDropdownOpen(false);
-                            onNavigate?.('feed');
+                            const res = await switchCommunity(c.id);
+                            if (res.success) {
+                              onNavigate?.('feed');
+                            }
                           }}
                           className={`w-full text-left px-3.5 py-2.5 flex items-start justify-between hover:bg-slate-800/60 transition-colors cursor-pointer ${
                             isSelected ? 'bg-indigo-600/10' : ''
@@ -285,11 +284,7 @@ export function Header({
             </button>
           )}
 
-          {/* Live RLS Status badge */}
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-teal-400 bg-teal-950/40 rounded-full border border-teal-800/60">
-            <span className="w-2 h-2 rounded-full bg-teal-400 inline-block animate-pulse" />
-            <span>RLS Active</span>
-          </div>
+
 
           {/* Profile Avatar */}
           {currentSession?.user && (

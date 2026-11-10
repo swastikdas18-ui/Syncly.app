@@ -21,10 +21,11 @@ export default function ProfileDashboardPage() {
     router.replace('/login');
   };
 
-  // Derive organization details dynamically
-  const resolvedTenantId = activeTenant?.id || activeCommunity?.id || profile?.tenant_id || '';
-  const resolvedTenantName = activeTenant?.name || activeCommunity?.name || 'Workspace';
-  const resolvedTenantSlug = activeTenant?.slug || activeCommunity?.slug || '';
+  // An active workspace exists ONLY if verified in activeTenant or activeCommunity
+  const verifiedActiveTenant = activeCommunity || activeTenant;
+  const resolvedTenantId = verifiedActiveTenant?.id || '';
+  const resolvedTenantName = verifiedActiveTenant?.name || '';
+  const resolvedTenantSlug = verifiedActiveTenant?.slug || '';
 
   const userRole = (profile?.role || (user as any)?.role || 'employee').toLowerCase();
 
@@ -42,14 +43,14 @@ export default function ProfileDashboardPage() {
     token: 'auth-session',
   } : null;
 
-  const tenantModel: any = resolvedTenantId ? {
+  const tenantModel: any = (resolvedTenantId && resolvedTenantName) ? {
     id: resolvedTenantId,
     name: resolvedTenantName,
     slug: resolvedTenantSlug,
-    createdAt: activeTenant?.created_at || new Date().toISOString(),
-    tagline: activeTenant?.tagline || 'Corporate Workspace',
-    memberCount: 1,
-  } : null;
+    createdAt: (verifiedActiveTenant as any)?.created_at || (verifiedActiveTenant as any)?.createdAt || new Date().toISOString(),
+    tagline: (verifiedActiveTenant as any)?.tagline || 'Corporate Workspace',
+    memberCount: (verifiedActiveTenant as any)?.memberCount || 1,
+  } : undefined;
 
   if (!sessionObj) {
     return (
@@ -66,7 +67,7 @@ export default function ProfileDashboardPage() {
         currentTenant={tenantModel}
         onRestartOnboarding={() => router.push('/onboarding')}
         onLogout={handleLogout}
-        onSelectView={(view) => router.push(`/${view}`)}
+        onSelectView={(view) => router.push(view.startsWith('/') ? view : `/${view}`)}
         onUpdateProfile={handleUpdateProfile}
       />
     </div>

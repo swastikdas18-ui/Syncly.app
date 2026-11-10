@@ -19,9 +19,23 @@ export async function POST(request: NextRequest) {
   // 1. Authenticate caller
   const auth = await getVerifiedAuthContext(request);
   if (!auth.isAuthenticated || !auth.userId) {
+    if (auth.error && auth.error.startsWith('Bad Request.')) {
+      return NextResponse.json({ error: auth.error }, { status: 400 });
+    }
+    if (auth.error && auth.error.startsWith('Forbidden.')) {
+      return NextResponse.json({ error: auth.error }, { status: 403 });
+    }
     return NextResponse.json(
-      { error: 'Unauthorized. Valid Supabase session required.' },
+      { error: auth.error || 'Unauthorized. Valid Supabase session required.' },
       { status: 401 }
+    );
+  }
+
+  // Handle membership query failure explicitly (fail closed with 503)
+  if (auth.membershipStatus === 'error') {
+    return NextResponse.json(
+      { error: 'Membership verification service temporarily unavailable.' },
+      { status: 503 }
     );
   }
 
@@ -55,7 +69,15 @@ export async function POST(request: NextRequest) {
       .eq('community_id', safeTenantId)
       .maybeSingle();
 
-    let targetRole: string | null = (membershipRecord as any)?.role || null;
+    if (membershipError) {
+      console.error('[workspace/switch] Membership query error:', membershipError);
+      return NextResponse.json(
+        { error: 'Membership verification service temporarily unavailable.' },
+        { status: 503 }
+      );
+    }
+
+    const targetRole: string | null = (membershipRecord as any)?.role || null;
 
     // Stale profile.tenant_id is NEVER trusted without an explicit record in public.memberships
     if (!targetRole) {
@@ -66,16 +88,31 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Fetch target workspace metadata from public.tenants
-    const { data: tenantData } = await supabase
+    const { data: tenantData, error: tenantError } = await supabase
       .from('tenants')
       .select('id, name, slug')
       .eq('id', safeTenantId)
       .maybeSingle();
 
+    if (tenantError) {
+      console.error('[workspace/switch] Tenant metadata lookup error:', tenantError);
+      return NextResponse.json(
+        { error: 'Workspace metadata service temporarily unavailable.' },
+        { status: 503 }
+      );
+    }
+
+    if (!tenantData) {
+      return NextResponse.json(
+        { error: 'Workspace not found.' },
+        { status: 404 }
+      );
+    }
+
     const workspaceInfo = {
       id: safeTenantId,
-      name: (tenantData as any)?.name || 'Workspace',
-      slug: (tenantData as any)?.slug || 'workspace',
+      name: (tenantData as any).name || 'Workspace',
+      slug: (tenantData as any).slug || 'workspace',
       role: targetRole,
     };
 

@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantContext, buildTenantSessionSql } from '@/lib/tenant/context.ts';
+import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
+import { handleAuthErrors } from '@/lib/auth/guard.ts';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const { tenantId, isValid } = await getTenantContext();
-
-  if (!isValid || !tenantId) {
-    return NextResponse.json({ error: 'Tenant context required.' }, { status: 401 });
+  // 1. Authoritative identity and membership verification
+  const auth = await getVerifiedAuthContext(request);
+  const authError = handleAuthErrors(auth, { requireWorkspace: true });
+  if (authError) {
+    return authError;
   }
+
+  const tenantId = auth.activeTenantId!;
 
   // Pure database response - returns clean empty list if user has no pending alerts
   return NextResponse.json({
     success: true,
     tenantId,
-    rlsContextSql: buildTenantSessionSql(tenantId),
     count: 0,
     data: [],
   });
