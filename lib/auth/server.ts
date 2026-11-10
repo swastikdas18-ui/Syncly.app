@@ -35,7 +35,8 @@ function isValidUUID(uuid: string | null | undefined): boolean {
  * 2. Never trusts manually decoded JWT payloads or client headers (x-user-id, x-user-email).
  * 3. Never trusts client-declared roles (syncly_role, body.role).
  * 4. Resolves user profile, active status, and tenant memberships from PostgreSQL public schema.
- * 5. Fails closed if user is unauthenticated, deactivated, or lacks membership in target tenant.
+ * 5. An active workspace context is ONLY resolved if the user holds an active membership.
+ * 6. Stale cookies pointing to a non-enrolled workspace clear activeTenantId instead of making the user unauthenticated.
  */
 export async function getVerifiedAuthContext(req?: NextRequest): Promise<VerifiedAuthContext> {
   const unauthorizedResult = (errorMessage: string = 'Unauthorized. Cryptographically verified Supabase authentication required.'): VerifiedAuthContext => ({
@@ -92,7 +93,7 @@ export async function getVerifiedAuthContext(req?: NextRequest): Promise<Verifie
 
     const memberships: MembershipRow[] = (membershipsData as unknown as MembershipRow[]) || [];
 
-    // 5. Resolve active workspace context
+    // 5. Resolve active workspace context strictly from verified memberships
     let candidateTenantId: string | null = null;
 
     if (req) {
@@ -119,33 +120,45 @@ export async function getVerifiedAuthContext(req?: NextRequest): Promise<Verifie
         activeTenantId = matchingMembership.community_id;
         resolvedRole = (matchingMembership.role as any) || 'employee';
       } else {
-        // Explicit cross-tenant access denied. Stale profile.tenant_id cannot restore access.
-        return {
-          isAuthenticated: false,
-          userId: user.id,
-          email: user.email || null,
-          profile,
-          role: null,
-          activeTenantId: null,
-          tenantId: null,
-          fullName: profile.full_name || null,
-          memberships,
-          error: 'Forbidden. You do not hold an active membership in the requested workspace.',
-        };
+        // If candidate tenant is an explicit route-targeted header (e.g. API call to specific tenant resource),
+        // we must deny cross-tenant access. But if it was just a stale cookie, fall back to first verified membership or null.
+        const isExplicitHeader = req && Boolean(req.headers.get('x-tenant-id'));
+        if (isExplicitHeader) {
+          return {
+            isAuthenticated: false,
+            userId: user.id,
+            email: user.email || null,
+            profile,
+            role: null,
+            activeTenantId: null,
+            tenantId: null,
+            fullName: profile.full_name || null,
+            memberships,
+            error: 'Forbidden. You do not hold an active membership in the requested workspace.',
+          };
+        } else {
+          // Stale browser cookie for non-enrolled workspace: reject cookie and use verified membership
+          const firstVerified = memberships[0] || null;
+          if (firstVerified) {
+            activeTenantId = firstVerified.community_id;
+            resolvedRole = (firstVerified.role as any) || 'employee';
+          } else {
+            activeTenantId = null;
+            resolvedRole = (profile.role as any) || 'employee';
+          }
+        }
       }
     } else {
-      // Default to user's verified active membership matching profile.tenant_id or first enrolled membership
-      const defaultMembership = memberships.find(
-        (m) => profile.tenant_id && m.community_id.toLowerCase() === profile.tenant_id.toLowerCase()
-      ) || memberships[0] || null;
+      // No candidate provided: select user's first verified active membership
+      const defaultMembership = memberships[0] || null;
 
       if (defaultMembership) {
         activeTenantId = defaultMembership.community_id;
         resolvedRole = (defaultMembership.role as any) || 'employee';
       } else {
-        // User has no active memberships in any tenant (all revoked/deleted)
+        // User has no active memberships in any tenant (un-enrolled account)
         activeTenantId = null;
-        resolvedRole = null;
+        resolvedRole = (profile.role as any) || 'employee';
       }
     }
 

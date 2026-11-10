@@ -127,7 +127,7 @@ export function Header({
               </div>
               
               <span className="truncate max-w-[120px] sm:max-w-[150px]">
-                {activeCommunity?.name || 'Acme Corporation'}
+                {activeCommunity?.name || 'Select Workspace'}
               </span>
 
               {activeCommunity?.userRole && (
@@ -284,11 +284,7 @@ export function Header({
             </button>
           )}
 
-          {/* Live RLS Status badge */}
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-teal-400 bg-teal-950/40 rounded-full border border-teal-800/60">
-            <span className="w-2 h-2 rounded-full bg-teal-400 inline-block animate-pulse" />
-            <span>RLS Active</span>
-          </div>
+
 
           {/* Profile Avatar */}
           {currentSession?.user && (

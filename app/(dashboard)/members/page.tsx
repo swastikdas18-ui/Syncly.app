@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTenant } from '@/lib/context/AuthContext.tsx';
 import { useWorkspace } from '@/lib/context/WorkspaceContext.tsx';
 import { api } from '@/src/lib/api.ts';
@@ -16,7 +17,9 @@ import {
   Sparkles,
   Loader2,
   Calendar,
-  Lock
+  Lock,
+  Compass,
+  PlusCircle
 } from 'lucide-react';
 
 interface MemberItem {
@@ -30,23 +33,27 @@ interface MemberItem {
   joinedAt?: string;
 }
 
-type RosterState = 'loading' | 'success' | 'forbidden' | 'unauthorized' | 'error';
+type RosterState = 'loading' | 'success' | 'forbidden' | 'unauthorized' | 'error' | 'no_workspace';
 
 export default function MembersPage() {
+  const router = useRouter();
   const { activeTenant } = useTenant();
-  const { activeCommunity } = useWorkspace();
+  const { activeCommunity, isLoading: isWorkspaceLoading } = useWorkspace();
   const [members, setMembers] = useState<MemberItem[]>([]);
   const [rosterState, setRosterState] = useState<RosterState>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
-  const currentWorkspaceId = activeTenant?.id || activeCommunity?.id || '';
-  const tenantName = activeTenant?.name || activeCommunity?.name || 'Workspace';
+  const verifiedWorkspace = activeCommunity || activeTenant;
+  const currentWorkspaceId = verifiedWorkspace?.id || '';
+  const tenantName = verifiedWorkspace?.name || '';
 
   const fetchMembers = useCallback(() => {
     if (!currentWorkspaceId) {
-      setRosterState('loading');
+      if (!isWorkspaceLoading) {
+        setRosterState('no_workspace');
+      }
       return;
     }
 
@@ -78,7 +85,7 @@ export default function MembersPage() {
         setRosterState('error');
         setErrorMessage(err?.message || 'Network error occurred while fetching members.');
       });
-  }, [currentWorkspaceId]);
+  }, [currentWorkspaceId, isWorkspaceLoading]);
 
   useEffect(() => {
     fetchMembers();
@@ -102,6 +109,44 @@ export default function MembersPage() {
       m.role.toLowerCase().includes(roleFilter.toLowerCase());
     return matchesSearch && matchesRole;
   });
+
+  if (rosterState === 'no_workspace') {
+    return (
+      <div className="max-w-xl mx-auto py-12 px-4 text-center space-y-5 animate-in fade-in duration-200">
+        <div className="w-14 h-14 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto shadow-md">
+          <Users className="w-7 h-7" />
+        </div>
+
+        <div className="space-y-2">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-100 tracking-tight">
+            You are not currently a member of any workspace.
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-md mx-auto">
+            Team member directories are scoped to verified corporate workspaces. Join a workspace to view colleague rosters.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => router.push('/communities/explore')}
+            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
+          >
+            <Compass className="w-4 h-4" />
+            <span>Explore Workspaces</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push('/communities/new')}
+            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 font-semibold text-xs transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <PlusCircle className="w-4 h-4 text-indigo-400" />
+            <span>Create Workspace</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -132,7 +177,7 @@ export default function MembersPage() {
         )}
       </div>
 
-      {/* Filter and Search Bar (only shown when successful or loading) */}
+      {/* Filter and Search Bar */}
       {rosterState === 'success' && (
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">

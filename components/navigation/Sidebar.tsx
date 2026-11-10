@@ -48,7 +48,8 @@ export function Sidebar({
   const { activeCommunity, joinedCommunities, switchCommunity } = useWorkspace();
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
 
-  const tenantName = activeTenant?.name || activeCommunity?.name || 'Workspace';
+  const hasConnectedWorkspace = Boolean(activeCommunity?.id || activeTenant?.id);
+  const tenantName = activeCommunity?.name || activeTenant?.name || (hasConnectedWorkspace ? 'Workspace' : 'No Workspace');
 
   const navItems = [
     {
@@ -184,10 +185,16 @@ export function Sidebar({
                   <span className="text-xs font-semibold text-slate-200 block truncate leading-tight">
                     {tenantName}
                   </span>
-                  <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Connected
-                  </span>
+                  {hasConnectedWorkspace ? (
+                    <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium mt-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Connected
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 font-medium mt-0.5">
+                      No active workspace
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -314,10 +321,7 @@ export function Sidebar({
           </button>
         )}
 
-        <div className={`flex items-center gap-2 text-[11px] text-slate-500 ${isCollapsed ? 'justify-center' : ''}`}>
-          <ShieldCheck className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-          {!isCollapsed && <span className="truncate">Multi-Tenant RLS Active</span>}
-        </div>
+
       </div>
     </aside>
   );
