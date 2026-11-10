@@ -39,12 +39,20 @@ export async function GET(
   const supabase = await createClient(request);
 
   // Authoritative check: Verify caller holds active owner or admin role in the target workspace
-  const { data: callerMembership } = await supabase
+  const { data: callerMembership, error: membershipError } = await supabase
     .from('memberships')
     .select('role')
     .eq('user_id', auth.userId)
     .eq('community_id', communityId)
     .maybeSingle();
+
+  if (membershipError) {
+    console.error('[communities/requests] Caller membership query error:', membershipError);
+    return NextResponse.json(
+      { error: 'Membership verification service temporarily unavailable.' },
+      { status: 503 }
+    );
+  }
 
   const callerRole = (callerMembership as { role?: string } | null)?.role;
   const isAuthorized = callerRole === 'owner' || callerRole === 'admin';
@@ -84,9 +92,17 @@ export async function GET(
   let profileMap: Record<string, { email?: string; full_name?: string }> = {};
 
   if (userIds.length > 0) {
-    const { data: profiles } = await (adminClient.from('profiles') as any)
+    const { data: profiles, error: profileErr } = await (adminClient.from('profiles') as any)
       .select('id, email, full_name')
       .in('id', userIds);
+
+    if (profileErr) {
+      console.error('[communities/requests] Requester profile lookup error:', profileErr);
+      return NextResponse.json(
+        { error: 'Failed to load requester profiles.' },
+        { status: 500 }
+      );
+    }
 
     if (profiles) {
       profiles.forEach((p: any) => {

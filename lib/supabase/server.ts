@@ -6,7 +6,18 @@ import { getSupabaseConfig } from '@/lib/supabase/config.ts';
 
 let clientFactoryOverride: ((req?: NextRequest) => any) | null = null;
 
+/**
+ * Controlled test injection hook for automated route integration test suites.
+ * 
+ * SECURITY INVARIANTS:
+ * 1. Strictly disabled in production mode (`process.env.NODE_ENV === 'production'`).
+ * 2. Cannot be invoked or altered via request parameters, headers, cookies, or user inputs.
+ * 3. Throws a fatal security error if called outside an explicit non-production/test execution environment.
+ */
 export function __setClientFactoryOverride(fn: ((req?: NextRequest) => any) | null) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[Security Violation] Test client factory overrides are strictly prohibited in production mode.');
+  }
   clientFactoryOverride = fn;
 }
 
@@ -16,7 +27,8 @@ export function __setClientFactoryOverride(fn: ((req?: NextRequest) => any) | nu
  * or directly from a NextRequest when provided.
  */
 export async function createClient(req?: NextRequest) {
-  if (clientFactoryOverride) {
+  // Overrides are only honored in non-production environments
+  if (clientFactoryOverride && process.env.NODE_ENV !== 'production') {
     return clientFactoryOverride(req);
   }
 
