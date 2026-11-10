@@ -1,26 +1,29 @@
 import { Post, Channel, ChatMessage, Tenant, PostComment, IsolationAuditResult, PostCategory, PresenceUser } from '../types.ts';
-import { DEFAULT_TENANT_ID, resolveTenantId } from './tenantContext.ts';
+import { resolveTenantId } from './tenantContext.ts';
 
 class SynclyApiClient {
-  private currentTenantId: string = "";
+  private currentTenantId: string | null = null;
   private sseSource: EventSource | null = null;
   private pollingTimer: any = null;
   private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
 
-  public setTenantId(tenantId: string) {
+  public setTenantId(tenantId: string | null) {
     this.currentTenantId = resolveTenantId(tenantId);
     this.reconnectSse();
   }
 
-  public getTenantId(): string {
+  public getTenantId(): string | null {
     return this.currentTenantId;
   }
 
   private getHeaders(): HeadersInit {
-    return {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-tenant-id': this.currentTenantId,
     };
+    if (this.currentTenantId) {
+      headers['x-tenant-id'] = this.currentTenantId;
+    }
+    return headers;
   }
 
   // --- TENANTS & COMMUNITIES ---
@@ -545,7 +548,14 @@ class SynclyApiClient {
   }
 
   private connectSse() {
-    if (!this.currentTenantId || !this.currentTenantId.includes("-")) return;
+    if (!this.currentTenantId) {
+      if (this.sseSource) {
+        this.sseSource.close();
+        this.sseSource = null;
+      }
+      this.stopPollingFallback();
+      return;
+    }
     if (typeof window === 'undefined') return;
 
     try {
@@ -559,7 +569,7 @@ class SynclyApiClient {
         return;
       }
 
-      const cleanTenant = (this.currentTenantId && this.currentTenantId.includes('-')) ? this.currentTenantId.trim() : '';
+      const cleanTenant = this.currentTenantId.trim();
       if (!cleanTenant) return;
       const params = new URLSearchParams({ tenantId: cleanTenant });
       const sseUrl = `/api/events/stream?${params.toString()}`;
@@ -601,8 +611,13 @@ class SynclyApiClient {
   }
 
   private startPollingFallback() {
+    if (!this.currentTenantId) return;
     if (this.pollingTimer) return;
     this.pollingTimer = setInterval(async () => {
+      if (!this.currentTenantId) {
+        this.stopPollingFallback();
+        return;
+      }
       try {
         await fetch(`/api/presence?tenantId=${encodeURIComponent(this.currentTenantId)}`, {
           headers: this.getHeaders(),
@@ -629,13 +644,14 @@ export const api = new SynclyApiClient();
 
 // ✅ Clean, strict URL construction
 export function subscribeToEventsStream(
-  tenantId: string = '00000000-0000-0000-0000-000000000001',
+  tenantId?: string | null,
   onMessage?: (data: any) => void
 ) {
   if (typeof window === 'undefined') return () => {};
+  if (!tenantId) return () => {};
 
   // 1. Sanitize tenant ID (strip whitespace and prevent non-UUID fallbacks)
-  const cleanTenant = (tenantId && tenantId.includes('-')) ? tenantId.trim() : '';
+  const cleanTenant = resolveTenantId(tenantId);
   if (!cleanTenant) return () => {};
 
   // 2. Build URL safely without manual string concatenation

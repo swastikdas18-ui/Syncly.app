@@ -43,7 +43,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
     activeCommunityRef.current = comm;
 
     if (!comm) {
-      api.setTenantId('');
+      api.setTenantId(null);
       if (typeof window !== 'undefined') {
         try {
           localStorage.removeItem('active_tenant_id');
@@ -155,7 +155,22 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
   useEffect(() => {
     setIsMounted(true);
     refreshMemberships();
-  }, [refreshMemberships]);
+
+    // Synchronize workspace memberships with Supabase Auth lifecycle events
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        await refreshMemberships();
+      } else if (event === 'SIGNED_OUT') {
+        setJoinedCommunities([]);
+        setAllCommunities([]);
+        syncActiveCommunity(null);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [refreshMemberships, syncActiveCommunity]);
 
   /**
    * switchCommunity

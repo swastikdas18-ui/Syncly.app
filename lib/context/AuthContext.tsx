@@ -5,12 +5,17 @@ import { supabase } from '@/lib/supabase.ts';
 import type { ProfileRow, TenantRow } from '@/types/database.ts';
 import { UserSession } from '@/src/types.ts';
 
+export type MembershipFetchStatus = 'idle' | 'loading' | 'success' | 'empty' | 'error';
+
 interface AuthContextType {
   session: UserSession | null;
   profile: ProfileRow | null;
   activeTenant: TenantRow | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  membershipStatus: MembershipFetchStatus;
+  membershipError: string | null;
+  retryMembershipFetch: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
   setActiveTenant: (tenant: TenantRow | null) => void;
@@ -24,6 +29,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [activeTenant, setActiveTenantState] = useState<TenantRow | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [membershipStatus, setMembershipStatus] = useState<MembershipFetchStatus>('idle');
+  const [membershipError, setMembershipError] = useState<string | null>(null);
 
   /**
    * Helper to clear stale workspace preferences from browser cookies and localStorage.
@@ -47,47 +54,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * Authoritative Workspace Resolution:
    * 1. Retrieve the authenticated Supabase user profile.
    * 2. Query user's active memberships from PostgreSQL public.memberships.
-   * 3. An active workspace is ONLY resolved if the user holds an active membership.
-   * 4. If a preferred tenant ID (from cookie or param) exists, use it ONLY if it is in verified memberships.
-   * 5. If user has multiple memberships, fallback to first verified membership.
-   * 6. If user has ZERO memberships, activeTenant is NULL and stale storage is cleared.
-   * 7. NEVER fall back to profile.tenant_id, user_metadata, or browser cookies without verified membership.
+   * 3. Handle query failures explicitly with status 'error' WITHOUT destroying valid authenticated session.
+   * 4. If query succeeds with 0 rows, set status to 'empty' and activeTenant to null.
+   * 5. If query succeeds with rows, validate preferredTenantId or default to first verified membership.
+   * 6. NEVER fall back to profile.tenant_id, user_metadata, or browser cookies without verified membership.
    */
   const fetchProfileAndTenant = useCallback(async (userId: string, preferredTenantId?: string) => {
+    setMembershipStatus('loading');
+    setMembershipError(null);
+
     try {
       // 1. Fetch live profile from public.profiles
-      const { data: profileData } = await supabase
+      const { data: profileData, error: profileErr } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
 
-      if (!profileData) {
-        setProfile(null);
-        setActiveTenantState(null);
-        clearStaleWorkspaceStorage();
-        return;
+      if (profileErr) {
+        console.warn('[AuthContext] Failed to load profile:', profileErr);
       }
 
-      const typedProfile = profileData as unknown as ProfileRow;
+      const typedProfile = profileData ? (profileData as unknown as ProfileRow) : null;
       setProfile(typedProfile);
 
       // 2. Fetch user's verified active memberships from public.memberships
-      const { data: membershipsData } = await supabase
+      const { data: membershipsData, error: memErr } = await supabase
         .from('memberships')
         .select('community_id, role')
         .eq('user_id', userId);
+
+      // Handle database query error explicitly
+      if (memErr) {
+        console.error('[AuthContext] Membership query failed:', memErr);
+        setMembershipStatus('error');
+        setMembershipError(memErr.message || 'Failed to query memberships.');
+        // Do not alter activeTenant if it was previously set; fail safe
+        setActiveTenantState(null);
+        return;
+      }
 
       const memberships = (membershipsData as Array<{ community_id: string; role: string }>) || [];
 
       // 3. User has ZERO memberships
       if (memberships.length === 0) {
+        setMembershipStatus('empty');
         setActiveTenantState(null);
         clearStaleWorkspaceStorage();
         return;
       }
 
       // 4. Resolve active tenant strictly from verified memberships
+      setMembershipStatus('success');
       let selectedCommunityId: string | null = null;
 
       if (preferredTenantId) {
@@ -125,15 +143,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setActiveTenantState(null);
         clearStaleWorkspaceStorage();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('[AuthContext] Error in fetchProfileAndTenant:', err);
-      setProfile(null);
+      setMembershipStatus('error');
+      setMembershipError(err?.message || 'Unexpected membership error.');
       setActiveTenantState(null);
-      clearStaleWorkspaceStorage();
     }
   }, [clearStaleWorkspaceStorage]);
 
   const refreshProfile = useCallback(async () => {
+    if (session?.user?.id) {
+      await fetchProfileAndTenant(session.user.id, activeTenant?.id);
+    }
+  }, [session?.user?.id, activeTenant?.id, fetchProfileAndTenant]);
+
+  const retryMembershipFetch = useCallback(async () => {
     if (session?.user?.id) {
       await fetchProfileAndTenant(session.user.id, activeTenant?.id);
     }
@@ -171,12 +195,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(null);
         setProfile(null);
         setActiveTenantState(null);
+        setMembershipStatus('idle');
         clearStaleWorkspaceStorage();
       }
     } catch {
       setSession(null);
       setProfile(null);
       setActiveTenantState(null);
+      setMembershipStatus('idle');
       clearStaleWorkspaceStorage();
     } finally {
       setIsLoading(false);
@@ -219,8 +245,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      if (newSession?.user) {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (event === 'SIGNED_OUT' || !newSession?.user) {
+        setSession(null);
+        setProfile(null);
+        setActiveTenantState(null);
+        setMembershipStatus('idle');
+        setMembershipError(null);
+        clearStaleWorkspaceStorage();
+      } else if (newSession?.user) {
         const user = newSession.user;
         const cookieTenant = typeof document !== 'undefined' 
           ? document.cookie.match(/active_tenant_id=([^;]+)/)?.[1]
@@ -242,11 +275,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           token: newSession.access_token,
         };
         setSession(formatted);
-      } else {
-        setSession(null);
-        setProfile(null);
-        setActiveTenantState(null);
-        clearStaleWorkspaceStorage();
       }
       setIsLoading(false);
     });
@@ -261,6 +289,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
     setProfile(null);
     setActiveTenantState(null);
+    setMembershipStatus('idle');
+    setMembershipError(null);
     clearStaleWorkspaceStorage();
   };
 
@@ -302,6 +332,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         activeTenant,
         isAuthenticated: !!session?.user?.id,
         isLoading,
+        membershipStatus,
+        membershipError,
+        retryMembershipFetch,
         signOut,
         refreshSession,
         setActiveTenant,
@@ -336,6 +369,9 @@ export function useTenant() {
     activeTenant: context.activeTenant,
     setActiveTenant: context.setActiveTenant,
     isLoading: context.isLoading,
+    membershipStatus: context.membershipStatus,
+    membershipError: context.membershipError,
+    retryMembershipFetch: context.retryMembershipFetch,
   };
 }
 
@@ -351,6 +387,9 @@ export function useAuth() {
     user: context.session?.user ? { id: context.session.user.id, email: context.session.user.email, role: context.session.user.role } : null,
     isAuthenticated: context.isAuthenticated,
     loading: context.isLoading,
+    membershipStatus: context.membershipStatus,
+    membershipError: context.membershipError,
+    retryMembershipFetch: context.retryMembershipFetch,
     signOut: context.signOut,
     refreshSession: context.refreshSession,
     refreshProfile: context.refreshProfile,

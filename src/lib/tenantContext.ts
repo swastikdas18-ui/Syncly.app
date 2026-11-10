@@ -14,13 +14,14 @@ export function isValidUUID(id: string | null | undefined): boolean {
 
 /**
  * Extracts and sanitizes tenant ID from request headers, params, or state.
- * Fallbacks strictly to default UUID instead of string literals like 'tenant-default'.
+ * Returns null when no valid UUID is provided.
+ * FAIL-CLOSED: NEVER silently substitutes Acme Corporation (DEFAULT_TENANT_ID) as a fallback.
  */
-export function resolveTenantId(rawTenantId?: string | null): string {
+export function resolveTenantId(rawTenantId?: string | null): string | null {
   if (rawTenantId && isValidUUID(rawTenantId)) {
     return rawTenantId.trim().toLowerCase();
   }
-  return DEFAULT_TENANT_ID;
+  return null;
 }
 
 export const INITIAL_TENANTS = [
