@@ -60,6 +60,16 @@ function createMockSupabase(scenario: {
       }),
     },
     rpc: async (fnName: string, args: any) => {
+      // Validate that calls to review_join_request strictly match the canonical database signature
+      if (fnName === 'review_join_request') {
+        const argKeys = Object.keys(args);
+        if (argKeys.length !== 2 || !argKeys.includes('p_request_id') || !argKeys.includes('p_action')) {
+          throw new Error(
+            `[RPC Signature Mismatch] review_join_request requires exactly (p_request_id, p_action), received: ${JSON.stringify(args)}`
+          );
+        }
+      }
+
       if (scenario.rpcError) {
         return { data: null, error: scenario.rpcError };
       }
@@ -503,9 +513,15 @@ async function run() {
       assert.strictEqual(json.error, 'Failed to load requester profiles.');
     });
 
-    await test('18. Community review action: RPC review_join_request executes successfully', async () => {
-      serverSupabaseModule.__setClientFactoryOverride(() =>
-        createMockSupabase({
+    /* -------------------------------------------------------------
+     * 3b. JOIN REQUEST REVIEW RPC CANONICAL SIGNATURE TESTS
+     * ------------------------------------------------------------- */
+    await test('18. Community review action: RPC review_join_request approve succeeds with canonical 2-arg contract', async () => {
+      let capturedArgs: any = null;
+      let capturedRpcName: string = '';
+
+      serverSupabaseModule.__setClientFactoryOverride(() => ({
+        ...createMockSupabase({
           authUser: { id: TEST_USER_ID, email: 'admin@acme.com' },
           membershipsData: [
             { community_id: ACME_TENANT_ID, role: 'admin', user_id: TEST_USER_ID },
@@ -513,17 +529,32 @@ async function run() {
           rpcResult: {
             success: true,
             status: 200,
-            action: 'approve',
+            action: 'approved',
             community_id: ACME_TENANT_ID,
             applicant_id: 'user-2',
             membership_id: 'mem-123',
           },
-        })
-      );
+        }),
+        rpc: async (fnName: string, args: any) => {
+          capturedRpcName = fnName;
+          capturedArgs = args;
+          return {
+            data: {
+              success: true,
+              status: 200,
+              action: args.p_action === 'approve' ? 'approved' : 'rejected',
+              community_id: ACME_TENANT_ID,
+              applicant_id: 'user-2',
+              membership_id: 'mem-123',
+            },
+            error: null,
+          };
+        },
+      }));
 
       const req = new NextRequest(`http://localhost:3000/api/communities/${ACME_TENANT_ID}/requests/${TEST_REQUEST_ID}/review`, {
         method: 'POST',
-        body: JSON.stringify({ action: 'approve', role: 'member' }),
+        body: JSON.stringify({ action: 'approve' }),
         headers: { 'content-type': 'application/json' },
       });
 
@@ -533,6 +564,136 @@ async function run() {
       assert.strictEqual(res.status, 200);
       const json = await res.json();
       assert.strictEqual(json.success, true);
+      assert.strictEqual(json.status, 'approved');
+
+      // Canonical signature assertions
+      assert.strictEqual(capturedRpcName, 'review_join_request');
+      assert.deepStrictEqual(Object.keys(capturedArgs).sort(), ['p_action', 'p_request_id']);
+      assert.strictEqual(capturedArgs.p_request_id, TEST_REQUEST_ID);
+      assert.strictEqual(capturedArgs.p_action, 'approve');
+      assert.strictEqual((capturedArgs as any).p_assigned_role, undefined);
+    });
+
+    await test('18b. Community review action: RPC review_join_request reject succeeds with canonical contract', async () => {
+      let capturedArgs: any = null;
+
+      serverSupabaseModule.__setClientFactoryOverride(() => ({
+        ...createMockSupabase({
+          authUser: { id: TEST_USER_ID, email: 'admin@acme.com' },
+          membershipsData: [
+            { community_id: ACME_TENANT_ID, role: 'admin', user_id: TEST_USER_ID },
+          ],
+        }),
+        rpc: async (fnName: string, args: any) => {
+          capturedArgs = args;
+          return {
+            data: {
+              success: true,
+              status: 200,
+              action: 'rejected',
+              community_id: ACME_TENANT_ID,
+            },
+            error: null,
+          };
+        },
+      }));
+
+      const req = new NextRequest(`http://localhost:3000/api/communities/${ACME_TENANT_ID}/requests/${TEST_REQUEST_ID}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'reject' }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+      const res = await reviewCommunityRequest(req, {
+        params: Promise.resolve({ id: ACME_TENANT_ID, requestId: TEST_REQUEST_ID }),
+      });
+      assert.strictEqual(res.status, 200);
+      const json = await res.json();
+      assert.strictEqual(json.success, true);
+      assert.strictEqual(json.status, 'rejected');
+
+      assert.deepStrictEqual(Object.keys(capturedArgs).sort(), ['p_action', 'p_request_id']);
+      assert.strictEqual(capturedArgs.p_action, 'reject');
+    });
+
+    await test('18c. Community review action: Inactive reviewer is rejected with 403', async () => {
+      serverSupabaseModule.__setClientFactoryOverride(() =>
+        createMockSupabase({
+          authUser: { id: TEST_USER_ID, email: 'admin@acme.com' },
+          profileData: {
+            id: TEST_USER_ID,
+            full_name: 'Suspended Admin',
+            status: 'suspended',
+            role: 'admin',
+          },
+          membershipsData: [
+            { community_id: ACME_TENANT_ID, role: 'admin', user_id: TEST_USER_ID },
+          ],
+        })
+      );
+
+      const req = new NextRequest(`http://localhost:3000/api/communities/${ACME_TENANT_ID}/requests/${TEST_REQUEST_ID}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'approve' }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+      const res = await reviewCommunityRequest(req, {
+        params: Promise.resolve({ id: ACME_TENANT_ID, requestId: TEST_REQUEST_ID }),
+      });
+      assert.strictEqual(res.status, 403);
+      const json = await res.json();
+      assert.strictEqual(json.error.includes('Forbidden'), true);
+    });
+
+    await test('18d. Community review action: Malformed request UUID is rejected with 400', async () => {
+      serverSupabaseModule.__setClientFactoryOverride(() =>
+        createMockSupabase({
+          authUser: { id: TEST_USER_ID, email: 'admin@acme.com' },
+          membershipsData: [
+            { community_id: ACME_TENANT_ID, role: 'admin', user_id: TEST_USER_ID },
+          ],
+        })
+      );
+
+      const req = new NextRequest(`http://localhost:3000/api/communities/${ACME_TENANT_ID}/requests/invalid-uuid/review`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'approve' }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+      const res = await reviewCommunityRequest(req, {
+        params: Promise.resolve({ id: ACME_TENANT_ID, requestId: 'invalid-uuid' }),
+      });
+      assert.strictEqual(res.status, 400);
+      const json = await res.json();
+      assert.strictEqual(json.error.includes('Invalid request identifier'), true);
+    });
+
+    await test('18e. Community review action: RPC database failure returns sanitized 500 error', async () => {
+      serverSupabaseModule.__setClientFactoryOverride(() =>
+        createMockSupabase({
+          authUser: { id: TEST_USER_ID, email: 'admin@acme.com' },
+          membershipsData: [
+            { community_id: ACME_TENANT_ID, role: 'admin', user_id: TEST_USER_ID },
+          ],
+          rpcError: { code: 'XX000', message: 'internal dead lock detected on row update' },
+        })
+      );
+
+      const req = new NextRequest(`http://localhost:3000/api/communities/${ACME_TENANT_ID}/requests/${TEST_REQUEST_ID}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'approve' }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+      const res = await reviewCommunityRequest(req, {
+        params: Promise.resolve({ id: ACME_TENANT_ID, requestId: TEST_REQUEST_ID }),
+      });
+      assert.strictEqual(res.status, 500);
+      const json = await res.json();
+      assert.strictEqual(json.error, 'Failed to process join request review.');
+      assert.strictEqual(JSON.stringify(json).includes('dead lock'), false);
     });
 
     /* -------------------------------------------------------------
@@ -566,3 +727,4 @@ run().catch((err) => {
   console.error('Fatal test runner failure:', err);
   process.exit(1);
 });
+

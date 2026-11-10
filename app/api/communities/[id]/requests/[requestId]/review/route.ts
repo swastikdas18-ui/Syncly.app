@@ -70,23 +70,19 @@ export async function POST(
 
     const body = await request.json();
     const action = body.action; // 'approve' | 'reject'
-    const role = body.role || 'member';
 
     if (!['approve', 'reject'].includes(action)) {
       return NextResponse.json({ error: 'Action must be approve or reject.' }, { status: 400 });
     }
 
-    if (action === 'approve' && !['member', 'admin', 'moderator'].includes(role)) {
-      return NextResponse.json({ error: 'Assigned role must be member, admin, or moderator.' }, { status: 400 });
-    }
-
     const supabase = await createClient(request);
 
-    // Call atomic RPC: review_join_request
+    // Call atomic RPC: review_join_request(p_request_id, p_action)
+    // Canonical database signature in Migration 017: review_join_request(UUID, TEXT)
+    // Server-controlled role assignment inside the database procedure assigns 'member'.
     const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('review_join_request', {
       p_request_id: requestId,
       p_action: action,
-      p_assigned_role: action === 'approve' ? role : null,
     });
 
     if (rpcError) {
@@ -137,14 +133,17 @@ export async function POST(
       },
     });
 
+    const resultAction = result.action || action;
+    const isApproved = resultAction === 'approve' || resultAction === 'approved';
+
     return NextResponse.json(
       {
         success: true,
         requestId,
         communityId: result.community_id || communityId,
-        status: result.action === 'approve' ? 'approved' : 'rejected',
+        status: isApproved ? 'approved' : 'rejected',
         membershipId: result.membership_id || null,
-        message: result.message || `Join request ${result.action} successfully.`,
+        message: result.message || `Join request ${resultAction} successfully.`,
       },
       { status: 200 }
     );
