@@ -10,7 +10,7 @@ import {
   Sparkles,
   Calendar
 } from 'lucide-react';
-import { useTenant } from '@/lib/context/AuthContext.tsx';
+import { useTenant, useUser } from '@/lib/context/AuthContext.tsx';
 
 interface NotificationItem {
   id: string;
@@ -23,42 +23,52 @@ interface NotificationItem {
 
 export default function NotificationsPage() {
   const { activeTenant } = useTenant();
+  const { profile } = useUser();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: 'notif-1',
-      type: 'announcement',
-      title: 'Global Enterprise Update',
-      description: 'Q1 Corporate Townhall scheduled for this Thursday at 10:00 AM UTC.',
-      time: '25m ago',
-      read: false,
-    },
-    {
-      id: 'notif-2',
-      type: 'message',
-      title: 'Channel Mention in #general',
-      description: 'Elena Rostova mentioned you in the announcement channel thread.',
-      time: '2h ago',
-      read: false,
-    },
-    {
-      id: 'notif-3',
-      type: 'event',
-      title: 'Event RSVP Confirmation',
-      description: 'You are marked attending: AI Engineering Architecture Sync.',
-      time: '1d ago',
-      read: true,
-    },
-    {
-      id: 'notif-4',
-      type: 'request',
-      title: 'Workspace Access Verified',
-      description: 'Your membership is active with End-to-end multi-tenant RLS isolation.',
-      time: '2d ago',
-      read: true,
-    },
-  ]);
+  // Prevent self-referential mention: if current logged-in user is Elena Rostova, show another teammate
+  const mentionActor = profile?.full_name?.toLowerCase().includes('elena')
+    ? 'Marcus Vance'
+    : 'Elena Rostova';
+
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  React.useEffect(() => {
+    setNotifications([
+      {
+        id: 'notif-1',
+        type: 'announcement',
+        title: 'Global Enterprise Update',
+        description: 'Q1 Corporate Townhall scheduled for this Thursday at 10:00 AM UTC.',
+        time: '25m ago',
+        read: false,
+      },
+      {
+        id: 'notif-2',
+        type: 'message',
+        title: 'Channel Mention in #general',
+        description: `${mentionActor} mentioned you in the announcement channel thread.`,
+        time: '2h ago',
+        read: false,
+      },
+      {
+        id: 'notif-3',
+        type: 'event',
+        title: 'Event RSVP Confirmation',
+        description: 'You are marked attending: AI Engineering Architecture Sync.',
+        time: '1d ago',
+        read: true,
+      },
+      {
+        id: 'notif-4',
+        type: 'request',
+        title: 'Workspace Access Verified',
+        description: 'Your membership is active with End-to-end multi-tenant RLS isolation.',
+        time: '2d ago',
+        read: true,
+      },
+    ]);
+  }, [mentionActor]);
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));

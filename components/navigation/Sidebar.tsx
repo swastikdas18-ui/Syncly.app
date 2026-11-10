@@ -239,19 +239,21 @@ export function Sidebar({
                     );
                   })}
                 </div>
-                <div className="pt-1 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setWorkspaceMenuOpen(false);
-                      onOpenCreateCommunity?.();
-                    }}
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-indigo-400 hover:bg-indigo-600/10 font-semibold transition-colors cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Create New Workspace</span>
-                  </button>
-                </div>
+                {onOpenCreateCommunity && (
+                  <div className="pt-1 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWorkspaceMenuOpen(false);
+                        onOpenCreateCommunity();
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-indigo-400 hover:bg-indigo-600/10 font-semibold transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Create New Workspace</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           )}
