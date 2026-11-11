@@ -72,8 +72,17 @@ export default function NotificationsPage() {
     return () => { isMounted = false; };
   }, [activeTenant?.id]);
 
-  const markAllRead = () => {
+  const markAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markAll: true }),
+      });
+    } catch (err) {
+      console.warn('Failed to persist mark-all-read:', err);
+    }
   };
 
   const filteredNotifs = notifications.filter((n) => (filter === 'unread' ? !n.read : true));

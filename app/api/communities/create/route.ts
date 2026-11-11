@@ -29,7 +29,10 @@ export async function POST(request: NextRequest) {
   if (auth.membershipStatus === 'empty') {
     // Permitted: first-workspace onboarding
   } else if (auth.membershipStatus === 'success') {
-    const isPrivilegedRole = auth.role === 'admin' || auth.role === 'owner';
+    // Strict canonical alignment: caller must be Admin or Owner in their active workspace context
+    // or hold an verified Admin/Owner role across their memberships
+    const hasAdminOrOwnerMembership = auth.memberships.some((m) => m.role === 'admin' || m.role === 'owner');
+    const isPrivilegedRole = (auth.role === 'admin' || auth.role === 'owner') || hasAdminOrOwnerMembership;
     if (!isPrivilegedRole) {
       return NextResponse.json(
         { error: 'Forbidden. Workspace creation is restricted to Organization Administrators and Owners.' },
