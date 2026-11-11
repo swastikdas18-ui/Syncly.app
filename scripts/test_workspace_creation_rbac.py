@@ -240,47 +240,47 @@ def run_suite():
 
     # Test 1: Admin allowed
     res = db.create_workspace_rpc(user_admin, "Admin Workspace 1", "admin-ws-1")
-    check("DB-RBAC-01", "DATABASE_RPC_TEST", "Existing Workspace Admin is allowed to create workspace", res['status'] == 201 and res['data']['role'] == 'owner', f"status={res['status']}")
+    check("DB-RBAC-01", "IN_MEMORY_SIMULATION", "Existing Workspace Admin is allowed to create workspace", res['status'] == 201 and res['data']['role'] == 'owner', f"status={res['status']}")
 
     # Test 2: Owner allowed
     res = db.create_workspace_rpc(user_owner, "Owner Workspace 1", "owner-ws-1")
-    check("DB-RBAC-02", "DATABASE_RPC_TEST", "Existing Workspace Owner is allowed to create workspace", res['status'] == 201 and res['data']['role'] == 'owner', f"status={res['status']}")
+    check("DB-RBAC-02", "IN_MEMORY_SIMULATION", "Existing Workspace Owner is allowed to create workspace", res['status'] == 201 and res['data']['role'] == 'owner', f"status={res['status']}")
 
     # Test 3: Manager denied (403)
     res = db.create_workspace_rpc(user_manager, "Manager Workspace", "mgr-ws")
-    check("DB-RBAC-03", "DATABASE_RPC_TEST", "Workspace Manager is strictly denied workspace creation", res['status'] == 403, f"status={res['status']}")
+    check("DB-RBAC-03", "IN_MEMORY_SIMULATION", "Workspace Manager is strictly denied workspace creation", res['status'] == 403, f"status={res['status']}")
 
     # Test 4: Member denied (403)
     res = db.create_workspace_rpc(user_member, "Member Workspace", "member-ws")
-    check("DB-RBAC-04", "DATABASE_RPC_TEST", "Workspace Member is strictly denied workspace creation", res['status'] == 403, f"status={res['status']}")
+    check("DB-RBAC-04", "IN_MEMORY_SIMULATION", "Workspace Member is strictly denied workspace creation", res['status'] == 403, f"status={res['status']}")
 
     # Test 5: Intern denied (403)
     res = db.create_workspace_rpc(user_intern, "Intern Workspace", "intern-ws")
-    check("DB-RBAC-05", "DATABASE_RPC_TEST", "Workspace Intern is strictly denied workspace creation", res['status'] == 403, f"status={res['status']}")
+    check("DB-RBAC-05", "IN_MEMORY_SIMULATION", "Workspace Intern is strictly denied workspace creation", res['status'] == 403, f"status={res['status']}")
 
     # Test 6: Employee denied (403)
     res = db.create_workspace_rpc(user_employee, "Employee Workspace", "employee-ws")
-    check("DB-RBAC-06", "DATABASE_RPC_TEST", "Workspace Employee is strictly denied workspace creation", res['status'] == 403, f"status={res['status']}")
+    check("DB-RBAC-06", "IN_MEMORY_SIMULATION", "Workspace Employee is strictly denied workspace creation", res['status'] == 403, f"status={res['status']}")
 
     # Test 7: Suspended user denied (403)
     res = db.create_workspace_rpc(user_suspended, "Suspended Workspace", "susp-ws")
-    check("DB-RBAC-07", "DATABASE_RPC_TEST", "Suspended user is denied workspace creation", res['status'] == 403, f"status={res['status']}")
+    check("DB-RBAC-07", "IN_MEMORY_SIMULATION", "Suspended user is denied workspace creation", res['status'] == 403, f"status={res['status']}")
 
     # Test 8: Unauthenticated caller denied (401)
     res = db.create_workspace_rpc(None, "Anon Workspace", "anon-ws")
-    check("DB-RBAC-08", "DATABASE_RPC_TEST", "Unauthenticated caller (auth.uid() is null) is denied with 401", res['status'] == 401, f"status={res['status']}")
+    check("DB-RBAC-08", "IN_MEMORY_SIMULATION", "Unauthenticated caller (auth.uid() is null) is denied with 401", res['status'] == 401, f"status={res['status']}")
 
     # Test 9: Zero-membership onboarding user allowed (201)
     res = db.create_workspace_rpc(user_onboarding, "Onboarding Corp", "onboarding-corp")
-    check("DB-RBAC-09", "DATABASE_RPC_TEST", "Zero-membership user successfully creates initial workspace", res['status'] == 201 and res['data']['role'] == 'owner', f"status={res['status']}")
+    check("DB-RBAC-09", "IN_MEMORY_SIMULATION", "Zero-membership user successfully creates initial workspace", res['status'] == 201 and res['data']['role'] == 'owner', f"status={res['status']}")
 
     # Test 10: Slug conflict produces 409
     res = db.create_workspace_rpc(user_admin, "Duplicate Acme", "acme-corp")
-    check("DB-RBAC-10", "DATABASE_RPC_TEST", "Duplicate slug produces deterministic 409 conflict", res['status'] == 409, f"status={res['status']}")
+    check("DB-RBAC-10", "IN_MEMORY_SIMULATION", "Duplicate slug produces deterministic 409 conflict", res['status'] == 409, f"status={res['status']}")
 
     # Test 11: After creating initial workspace, user_onboarding becomes owner and can create subsequent workspaces
     res = db.create_workspace_rpc(user_onboarding, "Second Workspace", "second-ws")
-    check("DB-RBAC-11", "DATABASE_RPC_TEST", "Owner of newly created workspace is recognized as authorized owner", res['status'] == 201, f"status={res['status']}")
+    check("DB-RBAC-11", "IN_MEMORY_SIMULATION", "Owner of newly created workspace is recognized as authorized owner", res['status'] == 201, f"status={res['status']}")
 
     print("\n" + "=" * 80)
     passed_count = sum(1 for r in results if r['status'] == 'PASS')

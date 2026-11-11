@@ -12,17 +12,34 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Canonical Workspace Creation Authorization Policy:
-  // - Verified Account with 0 memberships: Allowed (First-workspace onboarding)
-  // - User with existing memberships: Restricted strictly to 'admin' and 'owner'
-  // - Managers, Members, Interns, Employees, and Inactive profiles: Denied (403)
-  // - Missing role / unverified role when memberships exist: Denied (Fail-closed)
-  const isZeroMembership = auth.membershipStatus === 'empty' || (auth.memberships && auth.memberships.length === 0);
-  const isPrivilegedRole = auth.role === 'admin' || auth.role === 'owner';
-
-  if (!isZeroMembership && !isPrivilegedRole) {
+  // Fail-closed membership verification status handling:
+  // 1. Database/membership query error -> Fail closed with HTTP 503
+  if (auth.membershipStatus === 'error') {
     return NextResponse.json(
-      { error: 'Forbidden. Workspace creation is restricted to Organization Administrators and Owners.' },
+      { error: 'Membership verification service temporarily unavailable.' },
+      { status: 503 }
+    );
+  }
+
+  // 2. Canonical Workspace Creation Authorization Policy:
+  // - Verified Account with 0 memberships (membershipStatus = 'empty'): Allowed for first-workspace onboarding
+  // - Account with existing verified memberships (membershipStatus = 'success'): Restricted strictly to 'admin' and 'owner'
+  // - Managers, Members, Interns, Employees, and Inactive profiles: Denied (403)
+  // - Missing or unverified roles: Denied (Fail-closed)
+  if (auth.membershipStatus === 'empty') {
+    // Permitted: first-workspace onboarding
+  } else if (auth.membershipStatus === 'success') {
+    const isPrivilegedRole = auth.role === 'admin' || auth.role === 'owner';
+    if (!isPrivilegedRole) {
+      return NextResponse.json(
+        { error: 'Forbidden. Workspace creation is restricted to Organization Administrators and Owners.' },
+        { status: 403 }
+      );
+    }
+  } else {
+    // Fail-closed on any unrecognized membership status
+    return NextResponse.json(
+      { error: 'Forbidden. Unable to verify workspace creation permissions.' },
       { status: 403 }
     );
   }

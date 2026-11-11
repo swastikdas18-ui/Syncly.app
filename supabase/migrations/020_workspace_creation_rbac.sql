@@ -63,10 +63,11 @@ BEGIN
     );
   END IF;
 
-  -- 2. Validate caller account is active in profiles
+  -- 2. Validate caller account is active in profiles with row lock to eliminate onboarding concurrency race
   SELECT status INTO v_caller_status
   FROM public.profiles
-  WHERE id = v_caller_id;
+  WHERE id = v_caller_id
+  FOR UPDATE;
 
   IF v_caller_status IS NULL OR v_caller_status <> 'active' THEN
     RETURN jsonb_build_object(

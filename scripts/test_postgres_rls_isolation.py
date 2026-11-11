@@ -121,51 +121,51 @@ def run_suite():
     # 1. Elena (Acme Admin)
     elena_mems = db.select_memberships('u_elena')
     elena_mem_users = [m['user_id'] for m in elena_mems]
-    check("RLS-ISO-01", "POSTGRES_RLS", "Elena (Acme Admin) sees all Acme memberships (self + Marcus)",
+    check("RLS-ISO-01", "IN_MEMORY_SIMULATION", "Elena (Acme Admin) sees all Acme memberships (self + Marcus)",
           'u_elena' in elena_mem_users and 'u_marcus' in elena_mem_users, f"Users: {elena_mem_users}")
-    check("RLS-ISO-02", "POSTGRES_RLS", "Elena (Acme Admin) sees zero Globex memberships under RLS",
+    check("RLS-ISO-02", "IN_MEMORY_SIMULATION", "Elena (Acme Admin) sees zero Globex memberships under RLS",
           'u_devon' not in elena_mem_users and 'u_maya' not in elena_mem_users, f"Users: {elena_mem_users}")
 
     elena_profs = db.select_profiles('u_elena')
     elena_prof_users = [p['id'] for p in elena_profs]
-    check("RLS-ISO-03", "POSTGRES_RLS", "Elena sees Acme profiles but zero Globex profiles under RLS",
+    check("RLS-ISO-03", "IN_MEMORY_SIMULATION", "Elena sees Acme profiles but zero Globex profiles under RLS",
           'u_elena' in elena_prof_users and 'u_marcus' in elena_prof_users and 'u_devon' not in elena_prof_users and 'u_maya' not in elena_prof_users)
 
     # 2. Marcus (Acme Manager)
     marcus_mems = db.select_memberships('u_marcus')
     marcus_mem_users = [m['user_id'] for m in marcus_mems]
-    check("RLS-ISO-04", "POSTGRES_RLS", "Marcus (Acme Manager) sees own membership under RLS",
+    check("RLS-ISO-04", "IN_MEMORY_SIMULATION", "Marcus (Acme Manager) sees own membership under RLS",
           marcus_mem_users == ['u_marcus'], f"Users: {marcus_mem_users}")
-    check("RLS-ISO-05", "POSTGRES_RLS", "Marcus sees zero Globex memberships under RLS",
+    check("RLS-ISO-05", "IN_MEMORY_SIMULATION", "Marcus sees zero Globex memberships under RLS",
           'u_devon' not in marcus_mem_users and 'u_maya' not in marcus_mem_users)
 
     marcus_profs = db.select_profiles('u_marcus')
     marcus_prof_users = [p['id'] for p in marcus_profs]
-    check("RLS-ISO-06", "POSTGRES_RLS", "Marcus sees Acme profiles as a tenant member, zero Globex profiles",
+    check("RLS-ISO-06", "IN_MEMORY_SIMULATION", "Marcus sees Acme profiles as a tenant member, zero Globex profiles",
           'u_marcus' in marcus_prof_users and 'u_elena' in marcus_prof_users and 'u_devon' not in marcus_prof_users)
 
     # 3. Devon (Globex Admin)
     devon_mems = db.select_memberships('u_devon')
     devon_mem_users = [m['user_id'] for m in devon_mems]
-    check("RLS-ISO-07", "POSTGRES_RLS", "Devon (Globex Admin) sees all Globex memberships (self + Maya)",
+    check("RLS-ISO-07", "IN_MEMORY_SIMULATION", "Devon (Globex Admin) sees all Globex memberships (self + Maya)",
           'u_devon' in devon_mem_users and 'u_maya' in devon_mem_users, f"Users: {devon_mem_users}")
-    check("RLS-ISO-08", "POSTGRES_RLS", "Devon (Globex Admin) sees zero Acme memberships under RLS",
+    check("RLS-ISO-08", "IN_MEMORY_SIMULATION", "Devon (Globex Admin) sees zero Acme memberships under RLS",
           'u_elena' not in devon_mem_users and 'u_marcus' not in devon_mem_users)
 
     # 4. Maya (Globex Member)
     maya_mems = db.select_memberships('u_maya')
     maya_mem_users = [m['user_id'] for m in maya_mems]
-    check("RLS-ISO-09", "POSTGRES_RLS", "Maya (Globex Member) sees own membership under RLS",
+    check("RLS-ISO-09", "IN_MEMORY_SIMULATION", "Maya (Globex Member) sees own membership under RLS",
           maya_mem_users == ['u_maya'], f"Users: {maya_mem_users}")
-    check("RLS-ISO-10", "POSTGRES_RLS", "Maya sees zero Acme memberships under RLS",
+    check("RLS-ISO-10", "IN_MEMORY_SIMULATION", "Maya sees zero Acme memberships under RLS",
           'u_elena' not in maya_mem_users and 'u_marcus' not in maya_mem_users)
 
     # 5. Anonymous caller
     anon_mems = db.select_memberships(None)
-    check("RLS-ISO-11", "POSTGRES_RLS", "Anonymous caller sees 0 memberships under RLS", len(anon_mems) == 0)
+    check("RLS-ISO-11", "IN_MEMORY_SIMULATION", "Anonymous caller sees 0 memberships under RLS", len(anon_mems) == 0)
 
     anon_profs = db.select_profiles(None)
-    check("RLS-ISO-12", "POSTGRES_RLS", "Anonymous caller sees 0 profiles under RLS", len(anon_profs) == 0)
+    check("RLS-ISO-12", "IN_MEMORY_SIMULATION", "Anonymous caller sees 0 profiles under RLS", len(anon_profs) == 0)
 
     print("\n" + "=" * 80)
     passed_count = sum(1 for r in results if r['status'] == 'PASS')
