@@ -12,6 +12,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Workspace creation policy: Managers, Members, and Interns cannot create workspaces
+  const isPrivileged = !auth.role || auth.role === 'admin' || auth.role === 'owner';
+  if (!isPrivileged) {
+    return NextResponse.json(
+      { error: 'Forbidden. Workspace creation is restricted to Organization Administrators and Owners.' },
+      { status: 403 }
+    );
+  }
+
   // Rate limit community creation
   const rl = await checkRateLimit('community_create', auth.userId);
   if (!rl.isAllowed) {

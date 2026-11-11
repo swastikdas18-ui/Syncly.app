@@ -12,13 +12,33 @@ import {
 } from 'lucide-react';
 import { useTenant, useUser } from '@/lib/context/AuthContext.tsx';
 
-interface NotificationItem {
+export interface NotificationItem {
   id: string;
   type: 'message' | 'announcement' | 'request' | 'event';
   title: string;
   description: string;
+  actorId?: string;
+  actorName?: string;
+  recipientId?: string;
   time: string;
   read: boolean;
+}
+
+/**
+ * Format notification description derived strictly from the notification record
+ * and associated actor/recipient identities.
+ */
+export function formatNotificationDescription(
+  item: NotificationItem,
+  currentUserId?: string | null
+): string {
+  if (item.type === 'message' && item.actorName) {
+    if (currentUserId && item.actorId && item.actorId === currentUserId) {
+      return "You mentioned team members in the channel thread.";
+    }
+    return `${item.actorName} mentioned you in the announcement channel thread.`;
+  }
+  return item.description;
 }
 
 export default function NotificationsPage() {
@@ -26,49 +46,43 @@ export default function NotificationsPage() {
   const { profile } = useUser();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
-  // Prevent self-referential mention: if current logged-in user is Elena Rostova, show another teammate
-  const mentionActor = profile?.full_name?.toLowerCase().includes('elena')
-    ? 'Marcus Vance'
-    : 'Elena Rostova';
-
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-
-  React.useEffect(() => {
-    setNotifications([
-      {
-        id: 'notif-1',
-        type: 'announcement',
-        title: 'Global Enterprise Update',
-        description: 'Q1 Corporate Townhall scheduled for this Thursday at 10:00 AM UTC.',
-        time: '25m ago',
-        read: false,
-      },
-      {
-        id: 'notif-2',
-        type: 'message',
-        title: 'Channel Mention in #general',
-        description: `${mentionActor} mentioned you in the announcement channel thread.`,
-        time: '2h ago',
-        read: false,
-      },
-      {
-        id: 'notif-3',
-        type: 'event',
-        title: 'Event RSVP Confirmation',
-        description: 'You are marked attending: AI Engineering Architecture Sync.',
-        time: '1d ago',
-        read: true,
-      },
-      {
-        id: 'notif-4',
-        type: 'request',
-        title: 'Workspace Access Verified',
-        description: 'Your membership is active with End-to-end multi-tenant RLS isolation.',
-        time: '2d ago',
-        read: true,
-      },
-    ]);
-  }, [mentionActor]);
+  // Historical notification records preserving exact actor and recipient identity
+  const [notifications, setNotifications] = useState<NotificationItem[]>([
+    {
+      id: 'notif-1',
+      type: 'announcement',
+      title: 'Global Enterprise Update',
+      description: 'Q1 Corporate Townhall scheduled for this Thursday at 10:00 AM UTC.',
+      time: '25m ago',
+      read: false,
+    },
+    {
+      id: 'notif-2',
+      type: 'message',
+      title: 'Channel Mention in #general',
+      description: 'Elena Rostova mentioned you in the announcement channel thread.',
+      actorId: '11111111-1111-1111-1111-111111111111',
+      actorName: 'Elena Rostova',
+      time: '2h ago',
+      read: false,
+    },
+    {
+      id: 'notif-3',
+      type: 'event',
+      title: 'Event RSVP Confirmation',
+      description: 'You are marked attending: AI Engineering Architecture Sync.',
+      time: '1d ago',
+      read: true,
+    },
+    {
+      id: 'notif-4',
+      type: 'request',
+      title: 'Workspace Access Verified',
+      description: 'Your membership is active with End-to-end multi-tenant RLS isolation.',
+      time: '2d ago',
+      read: true,
+    },
+  ]);
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
@@ -169,7 +183,7 @@ export default function NotificationsPage() {
                   <span className="text-[11px] text-slate-500 shrink-0">{notif.time}</span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                  {notif.description}
+                  {formatNotificationDescription(notif, profile?.id)}
                 </p>
               </div>
 
