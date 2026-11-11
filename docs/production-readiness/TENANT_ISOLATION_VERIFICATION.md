@@ -1,16 +1,25 @@
-# MULTI-TENANT ISOLATION VERIFICATION REPORT
+# TENANT ISOLATION VERIFICATION REPORT
 
-## 1. Tenant Boundary Architecture
-Multi-tenancy in Syncly is enforced across all architectural layers:
-- **Client Layer**: `WorkspaceContext` and `api` client enforce active `x-tenant-id` injection.
-- **API Layer**: `lib/auth/server.ts` validates `x-tenant-id` syntax and verifies membership. Requests to unjoined workspaces fail closed with HTTP 403.
-- **Database Layer**: Row Level Security (RLS) policies on `tenants`, `memberships`, `channels`, `posts`, `post_reactions`, and `events` partition records by tenant.
+## 1. Multi-Tenant Security Boundary Architecture
+Syncly enforces tenant isolation across three complementary layers:
+1. **Perimeter Layer (`middleware.ts`)**: Validates session cookies, CSRF protection on mutation routes, and prevents cross-origin requests.
+2. **Application Route Layer (`lib/auth/server.ts` & API Routes)**: Validates caller session via `supabase.auth.getUser()`, looks up verified memberships from `public.memberships`, and checks that the requested tenant matches an active membership. Cross-tenant access is rejected with HTTP 403 Forbidden.
+3. **Database Engine Layer (PostgreSQL RLS)**: Tables (`tenants`, `profiles`, `channels`, `posts`, `post_reactions`, `memberships`) enforce Row Level Security filtered by `community_id` / `tenant_id`.
 
-## 2. Cross-Tenant Test Matrix
-| Scenario | Initiator | Target Tenant | Expected | Result |
-|---|---|---|---|---|
-| View Members | Elena (Acme) | Globex Technologies | 403 Forbidden | PASS |
-| View Posts | Devon (Globex) | Acme Corporation | 403 Forbidden | PASS |
-| React to Post | Marcus (Acme) | Globex Post | 403 Forbidden | PASS |
-| Switch Workspace | Maya (Globex) | Acme Corporation | 403 Forbidden | PASS |
-| Malformed Header | Any | Invalid UUID Format | 400 Bad Request | PASS |
+## 2. Real Route-Handler Verification (`tests/test_production_members_route.ts`)
+- **Elena Rostova (Acme Admin)**: Querying Acme returns Elena and Marcus; Globex members are completely excluded.
+- **Marcus Vance (Acme Manager)**: Querying Acme returns authorized Acme roster; 0 Globex records returned.
+- **Devon Thorne (Globex Admin)**: Querying Globex returns Devon and Maya; 0 Acme records returned.
+- **Maya Lin (Globex Member)**: Querying Globex returns authorized Globex roster; 0 Acme records returned.
+- **Cross-Tenant Attempts**:
+  - Elena attempting to query Globex: **HTTP 403 Forbidden**
+  - Devon attempting to query Acme: **HTTP 403 Forbidden**
+- **Fail-Closed Failure Handling**:
+  - Unauthenticated request: **HTTP 401 Unauthorized**
+  - Membership database timeout/failure: **HTTP 503 Service Unavailable**
+  - Profile database query error: **HTTP 500 Internal Server Error** (fails closed without leaking SQL or stack traces)
+
+## 3. Verification Classification
+- Route-Handler Contract Tests: **VERIFIED (10/10 PASS)**
+- RLS In-Memory Engine Simulation: **VERIFIED (12/12 PASS)**
+- Live PostgreSQL RLS: **BLOCKED (Requires real PostgreSQL test instance)**

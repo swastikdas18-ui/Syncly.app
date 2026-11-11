@@ -1,14 +1,24 @@
 # FOUR-PERSONA BROWSER TEST REPORT
 
-## 1. Persona Specification
-| Persona | Email | Expected Org | Expected Role | Testing Status |
-|---|---|---|---|---|
-| Elena Rostova | elena.rostova@acmecorp.com | Acme Corporation | Admin / Owner | BLOCKED (Exposed Passwords) |
-| Marcus Vance | marcus.vance@acmecorp.com | Acme Corporation | Manager | BLOCKED (Exposed Passwords) |
-| Devon Thorne | devon.thorne@globextech.com | Globex Technologies | Admin | BLOCKED (Exposed Passwords) |
-| Maya Lin | maya.lin@globextech.com | Globex Technologies | Member | BLOCKED (Exposed Passwords) |
+## 1. Persona Test Matrix
 
-## 2. Authentication Policy & Blocking Notice
-- **Constraint**: In accordance with the security policy, previous plain-text test credentials (`Password123!`) were marked compromised during Cycle 10.2.1.
-- **Status**: Live browser-based end-to-end authentication tests against production Supabase auth are marked **BLOCKED** pending the provisioning and secure distribution of refreshed credentials.
-- **Synthesized Contract Verification**: Contractual behavior for all 4 personas was thoroughly verified via simulated authenticated sessions in `tests/test_cycle10_3_3_workspace_sync.ts`, `tests/test_cycle10_4_1_route_integration.ts`, and `tests/test_personas_isolation.mjs`.
+| Persona | Organization | Workspace Role | Intended Read Scope | Creation Scope | Browser E2E Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Elena Rostova** | Acme Corporation | Admin | Full Acme Roster & Channels | Workspace Creation Allowed | **BLOCKED** (Awaiting Credentials) |
+| **Marcus Vance** | Acme Corporation | Manager | Authorized Acme Directory | Creation Denied (403) | **BLOCKED** (Awaiting Credentials) |
+| **Devon Thorne** | Globex Technologies | Admin | Full Globex Roster & Channels | Workspace Creation Allowed | **BLOCKED** (Awaiting Credentials) |
+| **Maya Lin** | Globex Technologies | Member | Authorized Globex Directory | Creation Denied (403) | **BLOCKED** (Awaiting Credentials) |
+
+## 2. Gating Rationale
+The four standard test account passwords are known to have been exposed in legacy fixtures and are currently marked compromised.
+The release instructions strictly mandate:
+- Never reuse exposed passwords.
+- Never substitute mocked browser authentication or synthetic cookies for real end-to-end authentication.
+- If fresh rotated credentials are not supplied through a secure local secret mechanism, the live browser authentication suites must remain marked **BLOCKED**.
+
+## 3. Verified Application-Level Controls
+While live browser login is blocked awaiting credentials:
+- Route-level and database simulation tests verified that Marcus and Maya are restricted from creating workspaces.
+- Channel listing tests verified channel parity between Elena and Marcus.
+- Member directory integration tests verified that cross-tenant access between Acme and Globex is rejected with HTTP 403.
+- Playwright responsive layout tests verified responsive geometry across 7 viewports without overlapping interactive elements.
