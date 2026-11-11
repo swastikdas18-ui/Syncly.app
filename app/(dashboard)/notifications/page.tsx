@@ -46,43 +46,31 @@ export default function NotificationsPage() {
   const { profile } = useUser();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
-  // Historical notification records preserving exact actor and recipient identity
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: 'notif-1',
-      type: 'announcement',
-      title: 'Global Enterprise Update',
-      description: 'Q1 Corporate Townhall scheduled for this Thursday at 10:00 AM UTC.',
-      time: '25m ago',
-      read: false,
-    },
-    {
-      id: 'notif-2',
-      type: 'message',
-      title: 'Channel Mention in #general',
-      description: 'Elena Rostova mentioned you in the announcement channel thread.',
-      actorId: '11111111-1111-1111-1111-111111111111',
-      actorName: 'Elena Rostova',
-      time: '2h ago',
-      read: false,
-    },
-    {
-      id: 'notif-3',
-      type: 'event',
-      title: 'Event RSVP Confirmation',
-      description: 'You are marked attending: AI Engineering Architecture Sync.',
-      time: '1d ago',
-      read: true,
-    },
-    {
-      id: 'notif-4',
-      type: 'request',
-      title: 'Workspace Access Verified',
-      description: 'Your membership is active with End-to-end multi-tenant RLS isolation.',
-      time: '2d ago',
-      read: true,
-    },
-  ]);
+  // Persistent notifications state loaded from authenticated API
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    async function loadNotifications() {
+      try {
+        setIsLoading(true);
+        const res = await fetch('/api/notifications', { credentials: 'include' });
+        if (res.ok) {
+          const json = await res.json();
+          if (isMounted) {
+            setNotifications(json.data || []);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load notifications:', err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+    loadNotifications();
+    return () => { isMounted = false; };
+  }, [activeTenant?.id]);
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));

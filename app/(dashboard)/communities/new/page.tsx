@@ -151,7 +151,8 @@ export default function NewCommunityPage() {
     );
   }
 
-  const canCreate = !profile?.role || profile.role === 'admin' || profile.role === 'owner';
+  // Fail-closed authorization: Admins and Owners can create workspaces; missing role or non-admin roles are restricted
+  const canCreate = profile?.role === 'admin' || profile?.role === 'owner';
   if (!canCreate && !authLoading) {
     return (
       <div className="w-full max-w-xl mx-auto py-12 text-center">

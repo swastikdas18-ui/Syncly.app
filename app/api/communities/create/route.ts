@@ -12,9 +12,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Workspace creation policy: Managers, Members, and Interns cannot create workspaces
-  const isPrivileged = !auth.role || auth.role === 'admin' || auth.role === 'owner';
-  if (!isPrivileged) {
+  // Canonical Workspace Creation Authorization Policy:
+  // - Verified Account with 0 memberships: Allowed (First-workspace onboarding)
+  // - User with existing memberships: Restricted strictly to 'admin' and 'owner'
+  // - Managers, Members, Interns, Employees, and Inactive profiles: Denied (403)
+  // - Missing role / unverified role when memberships exist: Denied (Fail-closed)
+  const isZeroMembership = auth.membershipStatus === 'empty' || (auth.memberships && auth.memberships.length === 0);
+  const isPrivilegedRole = auth.role === 'admin' || auth.role === 'owner';
+
+  if (!isZeroMembership && !isPrivilegedRole) {
     return NextResponse.json(
       { error: 'Forbidden. Workspace creation is restricted to Organization Administrators and Owners.' },
       { status: 403 }

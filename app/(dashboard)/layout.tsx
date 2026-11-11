@@ -31,8 +31,8 @@ export default function DashboardLayout({
   // Resolve workspace role from verified active membership (fallback to profile)
   const resolvedRole = activeCommunity?.userRole || (profile?.role as any) || 'employee';
 
-  // Workspace creation policy: Managers, Members, and Interns cannot create workspaces
-  const canCreateWorkspace = !resolvedRole || resolvedRole === 'admin' || resolvedRole === 'owner';
+  // Workspace creation policy: Admins and Owners can create workspaces; missing role or non-admin roles are restricted
+  const canCreateWorkspace = resolvedRole === 'admin' || resolvedRole === 'owner';
 
   // Restore sidebar collapse state from localStorage
   useEffect(() => {

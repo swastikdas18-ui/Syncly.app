@@ -71,7 +71,8 @@ export const CreateCommunityModal: React.FC<CreateCommunityModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const userRole = currentSession?.user?.role;
-  const isPrivileged = !userRole || userRole === 'admin' || userRole === 'owner';
+  // Fail-closed authorization: Admins and Owners are privileged; missing role or non-admin roles are restricted
+  const isPrivileged = userRole === 'admin' || userRole === 'owner';
 
   if (!isOpen) return null;
 
