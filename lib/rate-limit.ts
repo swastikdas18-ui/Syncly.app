@@ -74,34 +74,44 @@ export async function checkRateLimit(
 
   if (isConfigured) {
     try {
-      // Execute atomic Lua script via Upstash REST /eval endpoint
-      const res = await fetch(`${UPSTASH_URL}/eval`, {
+      // Upstash REST expects the full Redis command as a JSON array at the database URL.
+      // EVAL syntax: EVAL <script> <numkeys> <key> <arg...>
+      // Sending { script, keys, args } to /eval is not a valid Upstash REST command.
+      const redisUrl = UPSTASH_URL!.replace(/\/+$/, '');
+      const res = await fetch(redisUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${UPSTASH_TOKEN}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          script: LUA_RATELIMIT_SCRIPT,
-          keys: [key],
-          args: [String(rule.windowSeconds)],
-        }),
+        body: JSON.stringify([
+          'EVAL',
+          LUA_RATELIMIT_SCRIPT,
+          '1',
+          key,
+          String(rule.windowSeconds),
+        ]),
         signal: AbortSignal.timeout(2000), // 2s bounded timeout
       });
 
-      if (res.ok) {
-        const body = await res.json();
-        // Result is array [current, ttl]
-        const currentCount = Number(body.result?.[0] || 1);
-        const ttl = Number(body.result?.[1] || rule.windowSeconds);
-
-        return {
-          isAllowed: currentCount <= rule.limit,
-          limit: rule.limit,
-          remaining: Math.max(0, rule.limit - currentCount),
-          resetSeconds: ttl > 0 ? ttl : rule.windowSeconds,
-        };
+      const body = await res.json().catch(() => null);
+      if (!res.ok || body?.error || !Array.isArray(body?.result) || body.result.length < 2) {
+        throw new Error(`Upstash rate-limit command failed with HTTP ${res.status}`);
       }
+
+      // Lua returns [current request count, TTL seconds].
+      const currentCount = Number(body.result[0]);
+      const ttl = Number(body.result[1]);
+      if (!Number.isFinite(currentCount) || !Number.isFinite(ttl)) {
+        throw new Error('Upstash returned an invalid rate-limit result.');
+      }
+
+      return {
+        isAllowed: currentCount <= rule.limit,
+        limit: rule.limit,
+        remaining: Math.max(0, rule.limit - currentCount),
+        resetSeconds: ttl > 0 ? ttl : rule.windowSeconds,
+      };
     } catch {
       // Upstash outage, connection reset, or timeout
     }
