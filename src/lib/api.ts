@@ -32,38 +32,28 @@ class SynclyApiClient {
       const res = await fetch('/api/tenants', { headers: this.getHeaders() });
       if (res.ok) {
         const json = await res.json();
-        if (Array.isArray(json?.data) && json.data.length > 0) {
-          return json.data;
-        }
+        // An empty workspace list is a valid result, not a reason to query unrelated APIs.
+        return Array.isArray(json?.data) ? json.data : [];
       }
+      console.warn('API getTenants /api/tenants failed:', res.status);
     } catch (e) {
-      console.warn('API getTenants /api/tenants fallback:', e);
+      console.warn('API getTenants /api/tenants request failed:', e);
     }
 
+    // Fallback to the discovery registry only when the primary endpoint itself fails.
     try {
       const res = await fetch('/api/communities/explore', { headers: this.getHeaders() });
       if (res.ok) {
         const json = await res.json();
-        if (Array.isArray(json?.data) && json.data.length > 0) {
-          return json.data;
-        }
+        return Array.isArray(json?.data) ? json.data : [];
       }
+      console.warn('API getTenants /api/communities/explore failed:', res.status);
     } catch (e) {
-      console.warn('API getTenants /api/communities/explore fallback:', e);
+      console.warn('API getTenants /api/communities/explore request failed:', e);
     }
 
-    try {
-      const res = await fetch('/api/tenant/members', { headers: this.getHeaders() });
-      if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json?.data) && json.data.length > 0) {
-          return json.data;
-        }
-      }
-    } catch (e) {
-      console.warn('API getTenants /api/tenant/members fallback:', e);
-    }
-
+    // Never call /api/tenant/members here: it requires an active, verified tenant context
+    // and returns a member roster rather than Tenant records.
     return [];
   }
 
