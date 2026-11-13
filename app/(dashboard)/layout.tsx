@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useUser, useTenant } from '@/lib/context/AuthContext.tsx';
+import { useWorkspace } from '@/lib/context/WorkspaceContext.tsx';
 import { Header } from '@/components/navigation/Header.tsx';
 import { Sidebar } from '@/components/navigation/Sidebar.tsx';
 import { BottomNav } from '@/components/navigation/BottomNav.tsx';
@@ -20,11 +21,18 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const { user, profile, loading } = useUser();
   const { activeTenant } = useTenant();
+  const { activeCommunity } = useWorkspace();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isJoinRequestsModalOpen, setIsJoinRequestsModalOpen] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+  // Resolve workspace role from verified active membership (fallback to profile)
+  const resolvedRole = activeCommunity?.userRole || (profile?.role as any) || 'employee';
+
+  // Workspace creation policy: Admins and Owners can create workspaces; missing role or non-admin roles are restricted
+  const canCreateWorkspace = resolvedRole === 'admin' || resolvedRole === 'owner';
 
   // Restore sidebar collapse state from localStorage
   useEffect(() => {
@@ -56,7 +64,7 @@ export default function DashboardLayout({
   // Load pending join requests count if user is admin/owner
   useEffect(() => {
     if (!activeTenant?.id) return;
-    const isPrivileged = profile?.role === 'admin' || profile?.role === 'owner';
+    const isPrivileged = resolvedRole === 'admin' || resolvedRole === 'owner';
     if (!isPrivileged) {
       setPendingRequestsCount(0);
       return;
@@ -98,7 +106,7 @@ export default function DashboardLayout({
           email: user.email || '',
           fullName: profile.full_name || 'Member',
           headline: 'Corporate Team Member',
-          role: (profile.role as any) || 'employee',
+          role: (resolvedRole as any) || 'employee',
           tenantId: profile.tenant_id || activeTenant?.id || '',
           hasCompletedOnboarding: true,
         },
@@ -129,7 +137,7 @@ export default function DashboardLayout({
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={toggleSidebarCollapse}
         pendingRequestsCount={pendingRequestsCount}
-        onOpenCreateCommunity={() => setIsCreateModalOpen(true)}
+        onOpenCreateCommunity={canCreateWorkspace ? () => setIsCreateModalOpen(true) : undefined}
         onOpenJoinRequests={() => setIsJoinRequestsModalOpen(true)}
       />
 
@@ -142,7 +150,7 @@ export default function DashboardLayout({
         <Header
           currentSession={sessionObj}
           onNavigate={(path) => router.push(path.startsWith('/') ? path : `/${path}`)}
-          onOpenCreateCommunity={() => setIsCreateModalOpen(true)}
+          onOpenCreateCommunity={canCreateWorkspace ? () => setIsCreateModalOpen(true) : undefined}
           onOpenJoinRequests={() => setIsJoinRequestsModalOpen(true)}
           pendingRequestsCount={pendingRequestsCount}
           sidebarCollapsed={sidebarCollapsed}

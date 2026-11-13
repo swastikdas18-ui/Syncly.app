@@ -47,6 +47,9 @@ export default function RegisterPage() {
       });
 
       if (error) {
+        if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already exists')) {
+          throw new Error('An account with this corporate email already exists. Please sign in instead.');
+        }
         throw new Error(error.message);
       }
 

@@ -27,7 +27,8 @@ export default function ProfileDashboardPage() {
   const resolvedTenantName = verifiedActiveTenant?.name || '';
   const resolvedTenantSlug = verifiedActiveTenant?.slug || '';
 
-  const userRole = (profile?.role || (user as any)?.role || 'employee').toLowerCase();
+  // Prioritize active workspace membership role over static profile job title
+  const userRole = (activeCommunity?.userRole || profile?.role || (user as any)?.role || 'employee').toLowerCase();
 
   const sessionObj: any = user ? {
     user: {

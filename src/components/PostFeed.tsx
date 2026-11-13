@@ -341,8 +341,8 @@ export const PostFeed: React.FC<PostFeedProps> = ({
         )}
 
         {/* Category Filter Horizontal Rail & Create Post Trigger */}
-        <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar py-2 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 scroll-smooth">
-          <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 py-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 scroll-smooth shrink-0 min-w-0">
             {CATEGORIES.map((cat) => {
               const isActive = selectedCategory === cat.key;
               const count = cat.key === 'all'
@@ -369,14 +369,16 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             })}
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsComposerExpanded(!isComposerExpanded)}
-            className="sticky right-0 shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm shadow-indigo-500/25 transition-all cursor-pointer touch-manipulation min-h-[36px] sm:min-h-0 ml-2"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Create Post</span>
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => setIsComposerExpanded(!isComposerExpanded)}
+              className="self-start sm:self-auto shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm shadow-indigo-500/25 transition-all cursor-pointer touch-manipulation min-h-[36px] sm:min-h-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Post</span>
+            </button>
+          )}
         </div>
       </div>
 

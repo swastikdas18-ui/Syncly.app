@@ -151,6 +151,37 @@ export default function NewCommunityPage() {
     );
   }
 
+  // Fail-closed authorization:
+  // - First-workspace onboarding: Permitted if user has no tenant or default employee role
+  // - Existing workspaces: Restricted strictly to Organization Admins and Owners
+  const isZeroMembership = profile?.role === 'employee' || !profile?.tenant_id;
+  const isPrivilegedRole = profile?.role === 'admin' || profile?.role === 'owner';
+  const canCreate = isZeroMembership || isPrivilegedRole;
+  if (!canCreate && !authLoading) {
+    return (
+      <div className="w-full max-w-xl mx-auto py-12 text-center">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-8 backdrop-blur-xl shadow-2xl space-y-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 mx-auto flex items-center justify-center">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-100">Restricted Action</h2>
+          <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+            Workspace creation is restricted to Organization Administrators and Owners. Please contact your workspace administrator to provision a new tenant.
+          </p>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => router.push('/feed')}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Return to Feed
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (successData) {
     return (
       <div className="w-full max-w-2xl mx-auto py-8">

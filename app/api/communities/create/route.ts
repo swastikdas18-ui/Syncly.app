@@ -12,6 +12,41 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Fail-closed membership verification status handling:
+  // 1. Database/membership query error -> Fail closed with HTTP 503
+  if (auth.membershipStatus === 'error') {
+    return NextResponse.json(
+      { error: 'Membership verification service temporarily unavailable.' },
+      { status: 503 }
+    );
+  }
+
+  // 2. Canonical Workspace Creation Authorization Policy:
+  // - Verified Account with 0 memberships (membershipStatus = 'empty'): Allowed for first-workspace onboarding
+  // - Account with existing verified memberships (membershipStatus = 'success'): Restricted strictly to 'admin' and 'owner'
+  // - Managers, Members, Interns, Employees, and Inactive profiles: Denied (403)
+  // - Missing or unverified roles: Denied (Fail-closed)
+  if (auth.membershipStatus === 'empty') {
+    // Permitted: first-workspace onboarding
+  } else if (auth.membershipStatus === 'success') {
+    // Strict canonical alignment: caller must be Admin or Owner in their active workspace context
+    // or hold an verified Admin/Owner role across their memberships
+    const hasAdminOrOwnerMembership = auth.memberships.some((m) => m.role === 'admin' || m.role === 'owner');
+    const isPrivilegedRole = (auth.role === 'admin' || auth.role === 'owner') || hasAdminOrOwnerMembership;
+    if (!isPrivilegedRole) {
+      return NextResponse.json(
+        { error: 'Forbidden. Workspace creation is restricted to Organization Administrators and Owners.' },
+        { status: 403 }
+      );
+    }
+  } else {
+    // Fail-closed on any unrecognized membership status
+    return NextResponse.json(
+      { error: 'Forbidden. Unable to verify workspace creation permissions.' },
+      { status: 403 }
+    );
+  }
+
   // Rate limit community creation
   const rl = await checkRateLimit('community_create', auth.userId);
   if (!rl.isAllowed) {

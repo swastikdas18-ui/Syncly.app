@@ -117,7 +117,7 @@ export function Header({
             <button
               type="button"
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-900 text-slate-200 border border-slate-800/90 hover:border-slate-700/80 transition-all text-xs font-semibold max-w-[200px] sm:max-w-xs truncate cursor-pointer group shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-400 min-h-[40px]"
+              className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-900 text-slate-200 border border-slate-800/90 hover:border-slate-700/80 transition-all text-xs font-semibold max-w-[130px] min-[390px]:max-w-[170px] sm:max-w-xs truncate cursor-pointer group shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-400 min-h-[40px]"
               aria-expanded={dropdownOpen}
               aria-haspopup="true"
               aria-label="Switch active corporate workspace"
@@ -222,18 +222,20 @@ export function Header({
                       </span>
                     </button>
 
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        onOpenCreateCommunity?.();
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold text-indigo-400 hover:bg-indigo-950/50 rounded-xl flex items-center gap-2 transition-colors cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>+ Create New Workspace...</span>
-                    </button>
+                    {onOpenCreateCommunity && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          onOpenCreateCommunity();
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold text-indigo-400 hover:bg-indigo-950/50 rounded-xl flex items-center gap-2 transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>+ Create New Workspace...</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </>
