@@ -151,8 +151,12 @@ export default function NewCommunityPage() {
     );
   }
 
-  // Fail-closed authorization: Admins and Owners can create workspaces; missing role or non-admin roles are restricted
-  const canCreate = profile?.role === 'admin' || profile?.role === 'owner';
+  // Fail-closed authorization:
+  // - First-workspace onboarding: Permitted if user has no tenant or default employee role
+  // - Existing workspaces: Restricted strictly to Organization Admins and Owners
+  const isZeroMembership = profile?.role === 'employee' || !profile?.tenant_id;
+  const isPrivilegedRole = profile?.role === 'admin' || profile?.role === 'owner';
+  const canCreate = isZeroMembership || isPrivilegedRole;
   if (!canCreate && !authLoading) {
     return (
       <div className="w-full max-w-xl mx-auto py-12 text-center">
