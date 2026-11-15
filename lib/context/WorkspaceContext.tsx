@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { Tenant } from '@/src/types.ts';
+import { Tenant, PresenceUser } from '@/src/types.ts';
 import { api } from '@/src/lib/api.ts';
 import { supabase } from '@/lib/supabase.ts';
 
@@ -18,6 +18,10 @@ interface WorkspaceContextType {
   activeCommunity: JoinedCommunity | null;
   membershipStatus: WorkspaceFetchStatus;
   membershipError: string | null;
+  presenceUsers: PresenceUser[];
+  presenceConnectionState: 'connecting' | 'connected' | 'error';
+  myPresenceStatus: PresenceUser['status'];
+  updateMyPresence: (status: PresenceUser['status'], currentChannelName?: string | null) => void;
   switchCommunity: (communityId: string) => Promise<{ success: boolean; error?: string }>;
   joinCommunity: (communityId: string, options?: { message?: string }) => Promise<{ status: string; message: string; tenant?: Tenant }>;
   batchJoin: (communityIds: string[]) => Promise<{ success: boolean; joinedCount: number; message: string }>;
@@ -38,6 +42,37 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [membershipStatus, setMembershipStatus] = useState<WorkspaceFetchStatus>('idle');
   const [membershipError, setMembershipError] = useState<string | null>(null);
+
+  // Workspace-wide presence: remains connected while a user browses any dashboard page.
+  const [workspaceMembers, setWorkspaceMembers] = useState<PresenceUser[]>([]);
+  const [livePresence, setLivePresence] = useState<Record<string, PresenceUser>>({});
+  const [presenceConnectionState, setPresenceConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const [myPresenceStatus, setMyPresenceStatus] = useState<PresenceUser['status']>('online');
+  const [myPresenceChannelName, setMyPresenceChannelName] = useState<string | null>(null);
+  const [presenceUserId, setPresenceUserId] = useState<string | null>(null);
+  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const presenceConnectedRef = useRef(false);
+  const presenceBaseRef = useRef<{ userId: string; fullName: string; role: string; tenantId: string } | null>(null);
+
+  const updateMyPresence = useCallback((
+    status: PresenceUser['status'],
+    currentChannelName?: string | null
+  ) => {
+    setMyPresenceStatus(status);
+    setMyPresenceChannelName(currentChannelName || null);
+  }, []);
+
+  const presenceUsers: PresenceUser[] = workspaceMembers.map((member) => {
+    const live = livePresence[member.id];
+    const isSelf = member.id === presenceUserId;
+    return {
+      ...member,
+      fullName: isSelf ? `${member.fullName.replace(/\s*\(You\)$/, '')} (You)` : member.fullName,
+      status: live?.status || 'offline',
+      currentChannelId: live?.currentChannelId,
+      lastSeen: live?.lastSeen || 'offline',
+    };
+  });
 
   // Keep a ref to the latest active community to support rollback on failure
   const activeCommunityRef = useRef<JoinedCommunity | null>(null);
@@ -235,6 +270,165 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
     };
   }, [refreshMemberships, syncActiveCommunity]);
 
+  // Maintain a private Realtime Presence channel for the entire active workspace,
+  // not just while the user is viewing the Chat page.
+  useEffect(() => {
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const startWorkspacePresence = async () => {
+      const tenantId = activeCommunity?.id;
+      if (!tenantId) {
+        setMyPresenceChannelName(null);
+        setWorkspaceMembers([]);
+        setLivePresence({});
+        setPresenceUserId(null);
+        setPresenceConnectionState('connecting');
+        presenceBaseRef.current = null;
+        return;
+      }
+
+      setMyPresenceChannelName(null);
+      setPresenceConnectionState('connecting');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (cancelled) return;
+
+      if (!session?.user?.id) {
+        setPresenceConnectionState('error');
+        return;
+      }
+
+      const userId = session.user.id;
+      const [rosterResult, profileResult] = await Promise.all([
+        api.getWorkspaceMembers(tenantId),
+        supabase.from('profiles').select('full_name, role').eq('id', userId).maybeSingle(),
+      ]);
+      if (cancelled) return;
+
+      if (rosterResult.status === 'success') {
+        const roster: PresenceUser[] = rosterResult.data.map((member: any) => {
+          const fullName = member.name || 'Team Member';
+          return {
+            id: member.id,
+            tenantId,
+            fullName,
+            role: member.role || 'member',
+            initials: fullName.split(/\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase() || 'TM',
+            status: 'offline' as const,
+            lastSeen: 'offline',
+          };
+        }).filter((member) => Boolean(member.id));
+        setWorkspaceMembers(roster);
+      } else {
+        console.error('[WorkspacePresence] Failed to load tenant member roster:', rosterResult.error);
+        setWorkspaceMembers([]);
+      }
+
+      const profileRow = profileResult.data as { full_name?: string | null } | null;
+      const metadataName = session.user.user_metadata?.full_name;
+      const fullName = profileRow?.full_name
+        || (typeof metadataName === 'string' ? metadataName : null)
+        || session.user.email?.split('@')[0]
+        || 'Team Member';
+
+      presenceBaseRef.current = {
+        userId,
+        fullName,
+        role: activeCommunity?.userRole || 'member',
+        tenantId,
+      };
+      setPresenceUserId(userId);
+
+      channel = supabase.channel(`tenant:${tenantId}:presence`, {
+        config: {
+          private: true,
+          presence: {
+            key: `${userId}:${window.crypto.randomUUID()}`,
+          },
+        },
+      });
+      presenceChannelRef.current = channel;
+      presenceConnectedRef.current = false;
+
+      const syncPresence = () => {
+        if (!channel) return;
+        const state = channel.presenceState<{
+          userId: string;
+          fullName: string;
+          role: string;
+          status: PresenceUser['status'];
+          currentChannelId: string | null;
+          lastSeen: string;
+        }>();
+
+        const snapshot: Record<string, PresenceUser> = {};
+        Object.values(state).flat().forEach((presence) => {
+          if (!presence.userId) return;
+          snapshot[presence.userId] = {
+            id: presence.userId,
+            tenantId,
+            fullName: presence.fullName || 'Team Member',
+            role: presence.role || 'member',
+            initials: (presence.fullName || 'TM').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'TM',
+            status: presence.status || 'online',
+            currentChannelId: presence.currentChannelId || undefined,
+            lastSeen: presence.lastSeen || new Date().toISOString(),
+          };
+        });
+        setLivePresence(snapshot);
+      };
+
+      channel
+        .on('presence', { event: 'sync' }, syncPresence)
+        .on('presence', { event: 'join' }, syncPresence)
+        .on('presence', { event: 'leave' }, syncPresence)
+        .subscribe((status, error) => {
+          if (status === 'SUBSCRIBED') {
+            presenceConnectedRef.current = true;
+            setPresenceConnectionState('connected');
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            presenceConnectedRef.current = false;
+            setPresenceConnectionState('error');
+            console.error('[WorkspacePresence] Realtime subscription failed:', error);
+          }
+        });
+    };
+
+    void startWorkspacePresence();
+
+    return () => {
+      cancelled = true;
+      presenceConnectedRef.current = false;
+      if (channel && presenceChannelRef.current === channel) {
+        presenceChannelRef.current = null;
+      }
+      if (channel) {
+        void channel.untrack().catch(() => {});
+        void supabase.removeChannel(channel);
+      }
+      setLivePresence({});
+    };
+  }, [activeCommunity?.id, activeCommunity?.userRole]);
+
+  // Publish presence after the subscription is ready, and update it when the
+  // user changes their status or moves between chat channels.
+  useEffect(() => {
+    const channel = presenceChannelRef.current;
+    const base = presenceBaseRef.current;
+    if (!channel || !base || !presenceConnectedRef.current) return;
+
+    void channel.track({
+      ...base,
+      status: myPresenceStatus,
+      currentChannelId: myPresenceChannelName,
+      lastSeen: new Date().toISOString(),
+    }).then((trackStatus) => {
+      if (trackStatus !== 'ok') {
+        console.error('[WorkspacePresence] Presence update failed:', trackStatus);
+      }
+    });
+  }, [myPresenceStatus, myPresenceChannelName, presenceConnectionState]);
+
   /**
    * switchCommunity
    * 
@@ -315,6 +509,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
         activeCommunity,
         membershipStatus,
         membershipError,
+        presenceUsers,
+        presenceConnectionState,
+        myPresenceStatus,
+        updateMyPresence,
         switchCommunity,
         joinCommunity,
         batchJoin,
@@ -337,6 +535,10 @@ export function useWorkspace() {
       activeCommunity: null,
       membershipStatus: 'idle' as WorkspaceFetchStatus,
       membershipError: null,
+      presenceUsers: [],
+      presenceConnectionState: 'error' as const,
+      myPresenceStatus: 'online' as PresenceUser['status'],
+      updateMyPresence: () => {},
       switchCommunity: async () => ({ success: false, error: 'No workspace context' }),
       joinCommunity: async () => ({ status: 'error', message: 'No workspace context' }),
       batchJoin: async () => ({ success: false, joinedCount: 0, message: 'No workspace context' }),

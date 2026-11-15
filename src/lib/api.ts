@@ -1,6 +1,7 @@
 import { Post, Channel, ChatMessage, Tenant, PostComment, IsolationAuditResult, PostCategory, PresenceUser } from '../types.ts';
 import { resolveTenantId } from './tenantContext.ts';
 import { normalizeMediaUrls } from './mediaUrls.ts';
+import { supabase } from '@/lib/supabase.ts';
 
 class SynclyApiClient {
   private currentTenantId: string | null = null;
@@ -539,30 +540,55 @@ class SynclyApiClient {
 
   // --- MEDIA UPLOAD ---
   public async uploadMedia(file: File): Promise<{ url: string; path: string } | null> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const base64Data = reader.result as string;
-          const res = await fetch('/api/media/upload', {
-            method: 'POST',
-            headers: this.getHeaders(),
-            body: JSON.stringify({
-              filename: file.name,
-              base64Data,
-              contentType: file.type,
-            }),
-          });
-          if (!res.ok) throw new Error('Media upload failed');
-          const json = await res.json();
-          resolve({ url: json.url, path: json.path });
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
-    });
+    if (!this.currentTenantId) {
+      throw new Error('Select a verified workspace before uploading media.');
+    }
+
+    const MAX_SIZE_BYTES = 10 * 1024 * 1024;
+    const allowedTypes = new Set([
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'application/pdf',
+    ]);
+
+    if (!file || file.size <= 0) {
+      throw new Error('Choose a non-empty file to upload.');
+    }
+    if (file.size > MAX_SIZE_BYTES) {
+      throw new Error('File exceeds the 10 MB upload limit.');
+    }
+    if (!allowedTypes.has(file.type)) {
+      throw new Error('Unsupported file type. Upload a JPEG, PNG, GIF, WebP, or PDF.');
+    }
+
+    // Upload bytes directly from the browser to Supabase Storage. This avoids
+    // routing base64-expanded files through a Vercel Function request body.
+    const safeName = (file.name || 'attachment')
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .slice(-120);
+    const objectKey = `${this.currentTenantId}/chat/${window.crypto.randomUUID()}_${safeName}`;
+
+    const { data, error } = await supabase.storage
+      .from('community-media')
+      .upload(objectKey, file, {
+        cacheControl: '3600',
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (error || !data?.path) {
+      console.error('[API uploadMedia] Supabase Storage upload failed:', error);
+      throw new Error(error?.message || 'Unable to upload file to workspace storage.');
+    }
+
+    // Store a stable authenticated proxy URL. The download route creates a
+    // short-lived signed Storage URL and redirects the browser to the file.
+    return {
+      url: `/api/media/download?key=${encodeURIComponent(data.path)}`,
+      path: data.path,
+    };
   }
 
   // --- SUPABASE REALTIME PRESENCE ---

@@ -19,6 +19,7 @@ import { Channel, ChatMessage, Tenant, PresenceUser } from '../types.ts';
 import { api } from '../lib/api.ts';
 import { normalizeMediaUrls } from '../lib/mediaUrls.ts';
 import { useAuth } from '@/lib/context/AuthContext.tsx';
+import { useWorkspace } from '@/lib/context/WorkspaceContext.tsx';
 
 interface ChannelChatProps {
   channels: Channel[];
@@ -36,18 +37,23 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
   activeTenant,
 }) => {
   const { session, profile } = useAuth();
+  const {
+    presenceUsers,
+    presenceConnectionState,
+    myPresenceStatus,
+    updateMyPresence,
+  } = useWorkspace();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputContent, setInputContent] = useState('');
   const [mediaAttachments, setMediaAttachments] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [mediaUploadError, setMediaUploadError] = useState<string | null>(null);
   const [isNewChannelModalOpen, setIsNewChannelModalOpen] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDesc, setNewChannelDesc] = useState('');
   const [newChannelPrivate, setNewChannelPrivate] = useState(false);
 
-  // Supabase Presence State
-  const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([]);
-  const [myStatus, setMyStatus] = useState<'online' | 'away' | 'busy' | 'offline'>('online');
+  const myStatus = myPresenceStatus;
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
 
   // Mention Dropdown State
@@ -65,6 +71,16 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
 
   const currentChannel = channels.find((c) => c.id === activeChannelId) || channels[0];
 
+  // Set the current channel label in workspace-wide presence, then clear only
+  // the channel label when this chat view unmounts. The user remains online.
+  useEffect(() => {
+    if (!activeTenant?.id) return;
+    updateMyPresence(myStatus, currentChannel?.name || null);
+    return () => {
+      updateMyPresence(myStatus, null);
+    };
+  }, [activeTenant?.id, activeChannelId, currentChannel?.name, myStatus, updateMyPresence]);
+
   // Fetch messages when channel or tenant changes
   useEffect(() => {
     let isSubscribed = true;
@@ -81,23 +97,6 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
     };
   }, [activeChannelId, activeTenant?.id]);
 
-  // Fetch & Track Presence on tenant change or channel change
-  useEffect(() => {
-    let isSubscribed = true;
-    api.getPresence().then((data) => {
-      if (isSubscribed && data) {
-        setPresenceUsers(data);
-      }
-    });
-
-    // Track active presence in Supabase Realtime channel
-    api.trackPresence(myStatus, activeChannelId);
-
-    return () => {
-      isSubscribed = false;
-    };
-  }, [activeTenant?.id, activeChannelId, myStatus]);
-
   // Real-time listener for incoming messages & presence sync
   useEffect(() => {
     const unsubscribe = api.subscribeToEvents((event, data) => {
@@ -105,7 +104,6 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
         type?: string; 
         channelId?: string; 
         message?: ChatMessage;
-        presence?: PresenceUser[];
       };
 
       if (payload.type === 'MESSAGE_CREATED' && payload.channelId === activeChannelId && payload.message) {
@@ -120,9 +118,6 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
         scrollToBottom();
       }
 
-      if (payload.type === 'PRESENCE_SYNC' && payload.presence) {
-        setPresenceUsers(payload.presence);
-      }
     });
 
     return () => unsubscribe();
@@ -174,6 +169,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
 
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    setMediaUploadError(null);
     setIsUploading(true);
     for (let i = 0; i < files.length; i++) {
       try {
@@ -183,6 +179,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
         }
       } catch (err) {
         console.error('Chat upload failed:', err);
+        setMediaUploadError(err instanceof Error ? err.message : 'Image upload failed. Please try again.');
       }
     }
     setIsUploading(false);
@@ -208,10 +205,9 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
     }
   };
 
-  const handleStatusChange = async (status: 'online' | 'away' | 'busy' | 'offline') => {
-    setMyStatus(status);
+  const handleStatusChange = (status: 'online' | 'away' | 'busy' | 'offline') => {
+    updateMyPresence(status, currentChannel?.name || null);
     setIsStatusDropdownOpen(false);
-    await api.trackPresence(status, activeChannelId);
   };
 
   // Mention Trigger Checker
@@ -633,8 +629,16 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
               <div className="hidden sm:block h-3 w-px bg-slate-200" />
               <div className="flex items-center gap-1.5 font-mono text-[11px] text-emerald-600">
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="hidden sm:inline">Realtime Synced</span>
-                <span className="sm:hidden">Live</span>
+                <span className="hidden sm:inline">
+                  {presenceConnectionState === 'connected'
+                    ? 'Realtime Synced'
+                    : presenceConnectionState === 'connecting'
+                      ? 'Connecting Presence…'
+                      : 'Presence Unavailable'}
+                </span>
+                <span className="sm:hidden">
+                  {presenceConnectionState === 'connected' ? 'Live' : 'Offline'}
+                </span>
               </div>
             </div>
           </div>
@@ -706,6 +710,11 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
 
           {/* Sticky Message Composer */}
           <div className="p-2.5 sm:p-4 border-t border-slate-800/80 bg-slate-900/60 backdrop-blur-lg pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-4">
+            {mediaUploadError && (
+              <div role="alert" className="max-w-4xl mx-auto mb-2 text-xs text-rose-300 bg-rose-950/30 border border-rose-500/30 rounded-lg px-3 py-2">
+                {mediaUploadError}
+              </div>
+            )}
             {mediaAttachments.length > 0 && (
               <div className="flex items-center gap-2 mb-2">
                 {mediaAttachments.map((url, i) => (
