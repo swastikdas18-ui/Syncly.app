@@ -72,6 +72,27 @@ export default function NotificationsPage() {
     return () => { isMounted = false; };
   }, [activeTenant?.id]);
 
+  // Real-time notification subscription
+  React.useEffect(() => {
+    if (!activeTenant?.id) return () => {};
+
+    const { api } = require('@/src/lib/api.ts');
+    const unsubscribe = api.subscribeToEvents((event: string, data: any) => {
+      if (data?.type === 'NOTIFICATION_CREATED' && data?.notification) {
+        const newNotif = data.notification;
+        // Verify recipient matches current user if specified
+        if (!newNotif.recipientId || (profile?.id && newNotif.recipientId === profile.id)) {
+          setNotifications((prev) => {
+            if (prev.some((n) => n.id === newNotif.id)) return prev;
+            return [newNotif, ...prev];
+          });
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [activeTenant?.id, profile?.id]);
+
   const markAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     try {

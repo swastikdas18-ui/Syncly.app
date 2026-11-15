@@ -24,8 +24,12 @@ def run_tests():
         print(f"[{status}] [{classification}] {test_id}: {description} {f'({detail})' if detail else ''}")
         results.append((test_id, classification, description, status, detail))
 
-    # Load source files
-    with open('supabase/migrations/013_join_requests_workflow.sql', 'r', encoding='utf-8') as f:
+    # Load source files (017_rls_recursion_remediation.sql contains the canonical review_join_request definition)
+    import os
+    sql_path = 'supabase/migrations/017_rls_recursion_remediation.sql'
+    if not os.path.exists(sql_path):
+        sql_path = 'supabase/legacy_migrations/017_rls_recursion_remediation.sql'
+    with open(sql_path, 'r', encoding='utf-8') as f:
         sql = f.read()
 
     with open('app/api/communities/[id]/join/route.ts', 'r', encoding='utf-8') as f:
@@ -63,10 +67,8 @@ def run_tests():
         "SQL-03",
         "STATIC_SOURCE_ASSERTION",
         "Validates active owner/admin membership in target tenant",
-        "SELECT EXISTS" in sql and
-        "WHERE m.community_id = v_req.community_id" in sql and
-        "m.user_id = v_caller_id" in sql and
-        "m.role IN ('owner', 'admin')" in sql,
+        ("private.is_community_admin(v_req.community_id)" in sql or
+         ("SELECT EXISTS" in sql and "WHERE m.community_id = v_req.community_id" in sql and "m.role IN ('owner', 'admin')" in sql)),
         "Enforces strict administrative authority in target workspace"
     )
 

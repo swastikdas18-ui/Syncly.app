@@ -42,6 +42,65 @@ export default function FeedDashboardPage() {
     loadFeed();
   }, [verifiedWorkspace?.id]);
 
+  // Real-time Feed event subscription (cross-user post creation, edits, deletion, likes, comments)
+  useEffect(() => {
+    if (!verifiedWorkspace?.id) return () => {};
+
+    const unsubscribe = api.subscribeToEvents((event, data) => {
+      const payload = data as {
+        type?: string;
+        post?: Post;
+        postId?: string;
+        likesCount?: number;
+        hasLiked?: boolean;
+        comment?: any;
+      };
+
+      if (payload.type === 'POST_CREATED' && payload.post) {
+        const newPost = payload.post;
+        setPosts((prev) => {
+          if (prev.some((p) => p.id === newPost.id)) return prev;
+          return [newPost, ...prev];
+        });
+      } else if (payload.type === 'POST_UPDATED' && payload.post) {
+        const updated = payload.post;
+        setPosts((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)));
+      } else if (payload.type === 'POST_DELETED' && payload.postId) {
+        const deletedId = payload.postId;
+        setPosts((prev) => prev.filter((p) => p.id !== deletedId));
+      } else if (payload.type === 'POST_LIKED' && payload.postId) {
+        setPosts((prev) =>
+          prev.map((p) =>
+            p.id === payload.postId
+              ? {
+                  ...p,
+                  likesCount: payload.likesCount !== undefined ? payload.likesCount : p.likesCount,
+                  hasLiked: payload.hasLiked !== undefined ? payload.hasLiked : p.hasLiked,
+                }
+              : p
+          )
+        );
+      } else if (payload.type === 'COMMENT_CREATED' && payload.postId && payload.comment) {
+        setPosts((prev) =>
+          prev.map((p) => {
+            if (p.id === payload.postId) {
+              const currentComments = p.comments || [];
+              if (currentComments.some((c: any) => c.id === payload.comment.id)) return p;
+              return {
+                ...p,
+                commentsCount: (p.commentsCount || 0) + 1,
+                comments: [...currentComments, payload.comment],
+              };
+            }
+            return p;
+          })
+        );
+      }
+    });
+
+    return () => unsubscribe();
+  }, [verifiedWorkspace?.id]);
+
   const handlePostCreated = (newPost: Post) => {
     setPosts((prev) => [newPost, ...prev]);
   };

@@ -42,9 +42,21 @@ export async function GET(req: NextRequest) {
         encoder.encode(`event: connected\ndata: ${JSON.stringify({ tenantId, status: 'ok' })}\n\n`)
       );
 
-      // Keep-alive heartbeat every 15s to keep the serverless proxy channel open
+      // Keep-alive heartbeat to maintain the connection without exceeding serverless runtime budgets
+      // In serverless environments (Vercel Functions), SSE streams must not run indefinitely.
+      // Auto-terminate gracefully after 50 seconds so the client can cleanly reconnect or use Supabase Realtime.
+      let elapsedSeconds = 0;
       const interval = setInterval(() => {
+        elapsedSeconds += 15;
         try {
+          if (elapsedSeconds >= 45) {
+            clearInterval(interval);
+            try {
+              controller.enqueue(encoder.encode(`event: close\ndata: {"status":"refresh"}\n\n`));
+              controller.close();
+            } catch {}
+            return;
+          }
           controller.enqueue(encoder.encode(`: keep-alive\n\n`));
         } catch {
           clearInterval(interval);

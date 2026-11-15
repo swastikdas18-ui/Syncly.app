@@ -7,15 +7,77 @@ class SynclyApiClient {
   private currentTenantId: string | null = null;
   private sseSource: EventSource | null = null;
   private pollingTimer: any = null;
+  private realtimeChannel: any = null;
   private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
 
   public setTenantId(tenantId: string | null) {
-    this.currentTenantId = resolveTenantId(tenantId);
-    this.reconnectSse();
+    const nextTenantId = resolveTenantId(tenantId);
+    if (this.currentTenantId !== nextTenantId) {
+      this.currentTenantId = nextTenantId;
+      this.reconnectRealtime();
+      this.reconnectSse();
+    }
   }
 
   public getTenantId(): string | null {
     return this.currentTenantId;
+  }
+
+  public async broadcastEvent(event: string, payload: any) {
+    if (typeof window === 'undefined') return;
+    try {
+      if (this.realtimeChannel) {
+        await this.realtimeChannel.send({
+          type: 'broadcast',
+          event,
+          payload,
+        });
+      }
+    } catch (e) {
+      console.warn('[SynclyApiClient] Broadcast failed:', e);
+    }
+  }
+
+  private reconnectRealtime() {
+    if (typeof window === 'undefined') return;
+    if (this.realtimeChannel) {
+      supabase.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
+
+    if (!this.currentTenantId) return;
+
+    const topic = `tenant:${this.currentTenantId}:events`;
+    const channel = supabase.channel(topic, {
+      config: {
+        broadcast: { self: false },
+      },
+    });
+
+    const handleBroadcast = (event: string) => (p: any) => {
+      const data = p?.payload || {};
+      this.listeners.get('all')?.forEach((cb) => cb({ type: event, ...data }));
+    };
+
+    channel
+      .on('broadcast', { event: 'MESSAGE_CREATED' }, handleBroadcast('MESSAGE_CREATED'))
+      .on('broadcast', { event: 'POST_CREATED' }, handleBroadcast('POST_CREATED'))
+      .on('broadcast', { event: 'POST_UPDATED' }, handleBroadcast('POST_UPDATED'))
+      .on('broadcast', { event: 'POST_DELETED' }, handleBroadcast('POST_DELETED'))
+      .on('broadcast', { event: 'POST_LIKED' }, handleBroadcast('POST_LIKED'))
+      .on('broadcast', { event: 'COMMENT_CREATED' }, handleBroadcast('COMMENT_CREATED'))
+      .on('broadcast', { event: 'CHANNEL_CREATED' }, handleBroadcast('CHANNEL_CREATED'))
+      .on('broadcast', { event: 'NOTIFICATION_CREATED' }, handleBroadcast('NOTIFICATION_CREATED'))
+      .on('broadcast', { event: 'JOIN_REQUEST_CREATED' }, handleBroadcast('JOIN_REQUEST_CREATED'))
+      .on('broadcast', { event: 'JOIN_REQUEST_UPDATED' }, handleBroadcast('JOIN_REQUEST_UPDATED'));
+
+    channel.subscribe((status, err) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn(`[SynclyRealtime] Realtime subscription status: ${status}`, err);
+      }
+    });
+
+    this.realtimeChannel = channel;
   }
 
   private getHeaders(): HeadersInit {
@@ -308,10 +370,13 @@ class SynclyApiClient {
       if (!json?.data || typeof json.data !== 'object') {
         throw new Error('The server returned an invalid post response.');
       }
-      return {
+      const safePost: Post = {
         ...json.data,
         mediaUrls: normalizeMediaUrls(json.data.mediaUrls),
       };
+      // Broadcast POST_CREATED to connected workspace members
+      void this.broadcastEvent('POST_CREATED', { post: safePost, postId: safePost.id });
+      return safePost;
     } catch (e) {
       console.error('API createPost error:', e);
       return null;
@@ -329,6 +394,7 @@ class SynclyApiClient {
       if (!res.ok) {
         return { success: false, error: json.error || 'Failed to edit post' };
       }
+      void this.broadcastEvent('POST_UPDATED', { post: json.post, postId });
       return { success: true, post: json.post };
     } catch (e: any) {
       console.error('API editPost error:', e);
@@ -346,6 +412,7 @@ class SynclyApiClient {
       if (!res.ok) {
         return { success: false, error: json.error || 'Failed to delete post' };
       }
+      void this.broadcastEvent('POST_DELETED', { postId });
       return { success: true };
     } catch (e: any) {
       console.error('API deletePost error:', e);
@@ -361,6 +428,7 @@ class SynclyApiClient {
       });
       if (!res.ok) throw new Error('Failed to like post');
       const json = await res.json();
+      void this.broadcastEvent('POST_LIKED', { postId, likesCount: json.likesCount, hasLiked: json.hasLiked });
       return { likesCount: json.likesCount, hasLiked: json.hasLiked };
     } catch (e) {
       console.error('API toggleLikePost error:', e);
@@ -377,6 +445,7 @@ class SynclyApiClient {
       });
       if (!res.ok) throw new Error('Failed to add comment');
       const json = await res.json();
+      void this.broadcastEvent('COMMENT_CREATED', { postId, comment: json.data });
       return json.data;
     } catch (e) {
       console.error('API addComment error:', e);
@@ -448,6 +517,9 @@ class SynclyApiClient {
       });
       if (!res.ok) throw new Error('Failed to create channel');
       const json = await res.json();
+      if (json?.data) {
+        void this.broadcastEvent('CHANNEL_CREATED', { channel: json.data });
+      }
       return json.data;
     } catch (e) {
       console.error('API createChannel error:', e);
@@ -540,10 +612,16 @@ class SynclyApiClient {
       if (!res.ok) throw new Error('Failed to send message');
       const json = await res.json();
       if (!json?.data || typeof json.data !== 'object') return null;
-      return {
+      const safeMsg: ChatMessage = {
         ...json.data,
         mediaUrls: normalizeMediaUrls(json.data.mediaUrls),
       };
+      // Broadcast MESSAGE_CREATED to connected workspace members
+      void this.broadcastEvent('MESSAGE_CREATED', {
+        channelId,
+        message: safeMsg,
+      });
+      return safeMsg;
     } catch (e) {
       console.error('API sendMessage error:', e);
       return null;
