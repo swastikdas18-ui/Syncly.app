@@ -11,6 +11,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { useTenant, useUser } from '@/lib/context/AuthContext.tsx';
+import { api } from '@/src/lib/api.ts';
 
 export interface NotificationItem {
   id: string;
@@ -76,12 +77,11 @@ export default function NotificationsPage() {
   React.useEffect(() => {
     if (!activeTenant?.id) return () => {};
 
-    const { api } = require('@/src/lib/api.ts');
-    const unsubscribe = api.subscribeToEvents((event: string, data: any) => {
+        const unsubscribe = api.subscribeToEvents((event: string, data: any) => {
       if (data?.type === 'NOTIFICATION_CREATED' && data?.notification) {
         const newNotif = data.notification;
         // Verify recipient matches current user if specified
-        if (!newNotif.recipientId || (profile?.id && newNotif.recipientId === profile.id)) {
+        if (profile?.id && newNotif.recipientId === profile.id) {
           setNotifications((prev) => {
             if (prev.some((n) => n.id === newNotif.id)) return prev;
             return [newNotif, ...prev];
