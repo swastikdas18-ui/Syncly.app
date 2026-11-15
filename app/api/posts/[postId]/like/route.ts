@@ -54,7 +54,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
       if (postRow?.author_id && postRow.author_id !== userId) {
         const actorName = auth.fullName || auth.profile?.full_name || 'A team member';
-        void createAndDispatchNotification({
+        await createAndDispatchNotification({
           tenantId,
           recipientId: postRow.author_id,
           actorId: userId,
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
     if (rpcResult.hasLiked) {
-      void notifyAuthorIfLiked(true);
+      await notifyAuthorIfLiked(true);
     }
     return NextResponse.json({
       success: true,
