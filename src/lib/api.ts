@@ -5,8 +5,6 @@ import { supabase } from '@/lib/supabase.ts';
 
 class SynclyApiClient {
   private currentTenantId: string | null = null;
-  private sseSource: EventSource | null = null;
-  private pollingTimer: any = null;
   private realtimeChannel: any = null;
   private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
 
@@ -15,7 +13,6 @@ class SynclyApiClient {
     if (this.currentTenantId !== nextTenantId) {
       this.currentTenantId = nextTenantId;
       this.reconnectRealtime();
-      this.reconnectSse();
     }
   }
 
@@ -725,7 +722,10 @@ class SynclyApiClient {
     }
   }
 
-  // --- REAL-TIME SSE SUBSCRIPTION ---
+  // --- SUPABASE REALTIME EVENT LISTENERS ---
+  // The tenant-scoped Broadcast channel is established by setTenantId().
+  // Do not open the legacy SSE endpoint here: it has no event producer and
+  // only creates long-running Vercel invocations plus a redundant polling fallback.
   public subscribeToEvents(callback: (event: string, data: unknown) => void): () => void {
     const handler = (data: unknown) => callback('EVENT', data);
     if (!this.listeners.has('all')) {
@@ -733,106 +733,11 @@ class SynclyApiClient {
     }
     this.listeners.get('all')!.add(handler);
 
-    if (!this.sseSource) {
-      this.connectSse();
-    }
-
     return () => {
       this.listeners.get('all')?.delete(handler);
     };
   }
 
-  private connectSse() {
-    if (!this.currentTenantId) {
-      if (this.sseSource) {
-        this.sseSource.close();
-        this.sseSource = null;
-      }
-      this.stopPollingFallback();
-      return;
-    }
-    if (typeof window === 'undefined') return;
-
-    try {
-      if (this.sseSource) {
-        this.sseSource.close();
-        this.sseSource = null;
-      }
-
-      if (!('EventSource' in window)) {
-        this.startPollingFallback();
-        return;
-      }
-
-      const cleanTenant = this.currentTenantId.trim();
-      if (!cleanTenant) return;
-      const params = new URLSearchParams({ tenantId: cleanTenant });
-      const sseUrl = `/api/events/stream?${params.toString()}`;
-      const eventSource = new EventSource(sseUrl);
-      this.sseSource = eventSource;
-
-      eventSource.onopen = () => {
-        this.stopPollingFallback();
-      };
-
-      eventSource.onerror = (err) => {
-        console.warn('[SSE] EventSource closed due to error:', err);
-        eventSource.close();
-        if (this.sseSource === eventSource) {
-          this.sseSource = null;
-        }
-        this.startPollingFallback();
-      };
-
-      const forwardEvent = (eventName: string, ev: MessageEvent) => {
-        try {
-          const parsed = JSON.parse(ev.data);
-          this.listeners.get('all')?.forEach((cb) => cb({ type: eventName, ...parsed }));
-        } catch {
-          // ignore parsing error
-        }
-      };
-
-      eventSource.addEventListener('MESSAGE_CREATED', (e) => forwardEvent('MESSAGE_CREATED', e));
-      eventSource.addEventListener('POST_CREATED', (e) => forwardEvent('POST_CREATED', e));
-      eventSource.addEventListener('POST_LIKED', (e) => forwardEvent('POST_LIKED', e));
-      eventSource.addEventListener('COMMENT_CREATED', (e) => forwardEvent('COMMENT_CREATED', e));
-      eventSource.addEventListener('CHANNEL_CREATED', (e) => forwardEvent('CHANNEL_CREATED', e));
-      eventSource.addEventListener('PRESENCE_SYNC', (e) => forwardEvent('PRESENCE_SYNC', e));
-    } catch (e) {
-      console.warn('SSE connection failed, falling back to periodic polling:', e);
-      this.startPollingFallback();
-    }
-  }
-
-  private startPollingFallback() {
-    if (!this.currentTenantId) return;
-    if (this.pollingTimer) return;
-    this.pollingTimer = setInterval(async () => {
-      if (!this.currentTenantId) {
-        this.stopPollingFallback();
-        return;
-      }
-      try {
-        await fetch(`/api/presence?tenantId=${encodeURIComponent(this.currentTenantId)}`, {
-          headers: this.getHeaders(),
-        });
-      } catch {}
-    }, 30000);
-  }
-
-  private stopPollingFallback() {
-    if (this.pollingTimer) {
-      clearInterval(this.pollingTimer);
-      this.pollingTimer = null;
-    }
-  }
-
-  private reconnectSse() {
-    if (typeof window !== 'undefined') {
-      this.connectSse();
-    }
-  }
 }
 
 export const api = new SynclyApiClient();
