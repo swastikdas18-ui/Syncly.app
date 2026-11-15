@@ -4,6 +4,7 @@ import { handleAuthErrors } from '@/lib/auth/guard.ts';
 import { checkRateLimit } from '@/lib/rate-limit.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { Post, PostComment } from '@/src/types.ts';
+import { normalizeMediaUrls } from '@/src/lib/mediaUrls.ts';
 
 interface CreatePostPayload {
   title?: string;
@@ -145,7 +146,7 @@ export async function GET(request: NextRequest) {
       title: p.title || '',
       content: p.content,
       category: p.category || 'general',
-      mediaUrls: p.media_urls || [],
+      mediaUrls: normalizeMediaUrls(p.media_urls),
       likesCount: p.likes_count || 0,
       commentsCount: comments.length,
       hasLiked: userLikedPostIds.has(p.id),
@@ -230,7 +231,8 @@ export async function POST(request: NextRequest) {
         title: body.title?.trim() || '',
         content: body.content.trim(),
         category: body.category || 'general',
-        media_urls: Array.isArray(body.mediaUrls) ? body.mediaUrls : [],
+        // posts.media_urls is TEXT in Production; persist a JSON array string explicitly.
+        media_urls: JSON.stringify(normalizeMediaUrls(body.mediaUrls)),
         likes_count: 0,
         comments_count: 0,
       })
@@ -281,7 +283,7 @@ export async function POST(request: NextRequest) {
       title: newPostRow.title || '',
       content: newPostRow.content,
       category: newPostRow.category || 'general',
-      mediaUrls: newPostRow.media_urls || [],
+      mediaUrls: normalizeMediaUrls(newPostRow.media_urls),
       likesCount: 0,
       commentsCount: 0,
       createdAt: newPostRow.created_at,
