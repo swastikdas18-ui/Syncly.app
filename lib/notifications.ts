@@ -72,6 +72,7 @@ export async function createAndDispatchNotification(
         .eq('type', type)
         .eq('resource_id', resourceId)
         .eq('read', false)
+        .limit(1)
         .maybeSingle();
 
       if (existing) {
