@@ -92,7 +92,7 @@ export async function createAndDispatchNotification(
         resource_id: resourceId || null,
         read: false,
       })
-      .select('id, tenant_id, recipient_id, actor_id, type, title, description, resource_id, read, created_at, actor:actor_id(id, full_name, avatar_url)')
+      .select('id, tenant_id, recipient_id, actor_id, type, title, description, resource_id, read, created_at')
       .single();
 
     if (insertError || !row) {
@@ -100,12 +100,25 @@ export async function createAndDispatchNotification(
       return null;
     }
 
+    let actorName: string | undefined;
+    if (row.actor_id) {
+      const { data: actorProfile, error: actorProfileError } = await (adminClient.from('profiles') as any)
+        .select('full_name')
+        .eq('id', row.actor_id)
+        .maybeSingle();
+
+      if (actorProfileError) {
+        console.warn('[NotificationService] Failed to load notification actor profile:', actorProfileError);
+      }
+      actorName = actorProfile?.full_name || undefined;
+    }
+
     const payload: NotificationBroadcastPayload = {
       id: row.id,
       tenantId: row.tenant_id,
       recipientId: row.recipient_id,
       actorId: row.actor_id || undefined,
-      actorName: row.actor?.full_name || undefined,
+      actorName,
       type: row.type,
       title: row.title,
       description: row.description,
