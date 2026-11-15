@@ -206,7 +206,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       await (async () => {
         try {
           const mentionedTerms = Array.from(
-            new Set(mentionMatches.map((m: string) => m.slice(1).toLowerCase().replace(/_/g, ' ')))
+            new Set(mentionMatches.map((m: string) => m.slice(1).toLowerCase().replace(/_/g, ' ').replace(/\\s+/g, ' ').trim()))
           );
 
           // Get tenant members
@@ -223,12 +223,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
           if (members && Array.isArray(members)) {
             for (const member of members) {
               const prof = member.profiles || {};
-              const memberName = (prof.full_name || '').toLowerCase();
+              const memberName = (prof.full_name || '').toLowerCase().replace(/\\s+/g, ' ').trim();
               const memberId = member.user_id;
 
               if (memberId && memberId !== auth.userId && memberName) {
+                // Chat mention suggestions insert the full name with underscores,
+                // so match normalized full names exactly rather than notifying
+                // similarly named workspace members on partial matches.
                 const isMentioned = mentionedTerms.some((term: string) =>
-                  memberName.includes(term) || term.includes(memberName)
+                  term.replace(/\\s+/g, ' ').trim() === memberName
                 );
 
                 if (isMentioned) {
