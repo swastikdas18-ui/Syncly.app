@@ -314,7 +314,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
             fullName,
             role: member.role || 'member',
             initials: fullName.split(/\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase() || 'TM',
-            status: 'offline',
+            status: 'offline' as const,
             lastSeen: 'offline',
           };
         }).filter((member) => Boolean(member.id));
@@ -324,8 +324,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
         setWorkspaceMembers([]);
       }
 
-      const fullName = profileResult.data?.full_name
-        || session.user.user_metadata?.full_name
+      const profileRow = profileResult.data as { full_name?: string | null } | null;
+      const metadataName = session.user.user_metadata?.full_name;
+      const fullName = profileRow?.full_name
+        || (typeof metadataName === 'string' ? metadataName : null)
         || session.user.email?.split('@')[0]
         || 'Team Member';
 
