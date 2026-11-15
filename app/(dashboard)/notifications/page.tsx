@@ -77,7 +77,7 @@ export default function NotificationsPage() {
   React.useEffect(() => {
     if (!activeTenant?.id) return () => {};
 
-        const unsubscribe = api.subscribeToEvents((event: string, data: any) => {
+    const unsubscribe = api.subscribeToEvents((event: string, data: any) => {
       if (data?.type === 'NOTIFICATION_CREATED' && data?.notification) {
         const newNotif = data.notification;
         // Verify recipient matches current user if specified
