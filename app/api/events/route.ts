@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 import { handleAuthErrors } from '@/lib/auth/guard.ts';
 import { createClient } from '@/lib/supabase/server.ts';
+import { createAndDispatchNotification } from '@/lib/notifications.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,6 +116,34 @@ export async function POST(request: NextRequest) {
     if (error) {
       return NextResponse.json({ error: 'Failed to create event: ' + error.message }, { status: 500 });
     }
+
+    // Notify workspace members about new all-hands/company events
+    await (async () => {
+      try {
+        const { data: members } = await (supabase.from('memberships') as any)
+          .select('user_id')
+          .eq('community_id', tenantId);
+
+        const organizerName = auth.fullName || auth.profile?.full_name || 'A team member';
+        if (members && Array.isArray(members)) {
+          for (const m of members) {
+            if (m.user_id && m.user_id !== auth.userId) {
+              await createAndDispatchNotification({
+                tenantId,
+                recipientId: m.user_id,
+                actorId: auth.userId,
+                type: 'event',
+                title: 'New Workspace Event Scheduled',
+                description: `${organizerName} scheduled "${newEvent.title}" for ${newEvent.date}${newEvent.time ? ` at ${newEvent.time}` : ''}.`,
+                resourceId: newEvent.id,
+              });
+            }
+          }
+        }
+      } catch (evErr) {
+        console.warn('[Events] Failed to dispatch event notifications:', evErr);
+      }
+    })();
 
     return NextResponse.json({
       success: true,

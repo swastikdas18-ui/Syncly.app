@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { PostComment } from '@/src/types.ts';
+import { createAndDispatchNotification } from '@/lib/notifications.ts';
 
 interface RouteContext {
   params: Promise<{ postId: string }>;
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Verify post belongs to current tenant
     const { data: post, error: postErr } = await (supabase.from('posts') as any)
-      .select('id, tenant_id, comments_count')
+      .select('id, tenant_id, author_id, title, comments_count')
       .eq('id', postId)
       .eq('tenant_id', tenantId)
       .single();
@@ -91,6 +92,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
       content: commentRow.content,
       createdAt: commentRow.created_at,
     };
+
+    // If the commenter is not the post author, notify the post author
+    if (post.author_id && post.author_id !== auth.userId) {
+      await createAndDispatchNotification({
+        tenantId,
+        recipientId: post.author_id,
+        actorId: auth.userId,
+        type: 'message',
+        title: 'New Comment on Your Post',
+        description: `${cName} commented: "${content.length > 60 ? content.slice(0, 57) + '...' : content}"`,
+        resourceId: postId,
+      });
+    }
 
     return NextResponse.json({ success: true, data: formattedComment }, { status: 201 });
   } catch {

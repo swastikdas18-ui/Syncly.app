@@ -5,6 +5,7 @@ import { checkRateLimit } from '@/lib/rate-limit.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { Post, PostComment } from '@/src/types.ts';
 import { normalizeMediaUrls } from '@/src/lib/mediaUrls.ts';
+import { createAndDispatchNotification } from '@/lib/notifications.ts';
 
 interface CreatePostPayload {
   title?: string;
@@ -289,6 +290,35 @@ export async function POST(request: NextRequest) {
       createdAt: newPostRow.created_at,
       comments: [],
     };
+
+    // If the post is an announcement, notify workspace members
+    if (newPostRow.category === 'announcement') {
+      await (async () => {
+        try {
+          const { data: members } = await (supabase.from('memberships') as any)
+            .select('user_id')
+            .eq('community_id', effectiveTenantId);
+
+          if (members && Array.isArray(members)) {
+            for (const m of members) {
+              if (m.user_id && m.user_id !== auth.userId) {
+                await createAndDispatchNotification({
+                  tenantId: effectiveTenantId,
+                  recipientId: m.user_id,
+                  actorId: auth.userId,
+                  type: 'announcement',
+                  title: newPostRow.title ? `Announcement: ${newPostRow.title}` : 'New Workspace Announcement',
+                  description: `${authorName} published an announcement: "${newPostRow.content.length > 60 ? newPostRow.content.slice(0, 57) + '...' : newPostRow.content}"`,
+                  resourceId: newPostRow.id,
+                });
+              }
+            }
+          }
+        } catch (annErr) {
+          console.warn('[Posts] Failed to dispatch announcement notifications:', annErr);
+        }
+      })();
+    }
 
     return NextResponse.json({ success: true, data: formattedPost }, { status: 201 });
   } catch {

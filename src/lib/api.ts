@@ -5,17 +5,76 @@ import { supabase } from '@/lib/supabase.ts';
 
 class SynclyApiClient {
   private currentTenantId: string | null = null;
-  private sseSource: EventSource | null = null;
-  private pollingTimer: any = null;
+  private realtimeChannel: any = null;
   private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
 
   public setTenantId(tenantId: string | null) {
-    this.currentTenantId = resolveTenantId(tenantId);
-    this.reconnectSse();
+    const nextTenantId = resolveTenantId(tenantId);
+    if (this.currentTenantId !== nextTenantId) {
+      this.currentTenantId = nextTenantId;
+      this.reconnectRealtime();
+    }
   }
 
   public getTenantId(): string | null {
     return this.currentTenantId;
+  }
+
+  public async broadcastEvent(event: string, payload: any) {
+    if (typeof window === 'undefined') return;
+    try {
+      if (this.realtimeChannel) {
+        await this.realtimeChannel.send({
+          type: 'broadcast',
+          event,
+          payload,
+        });
+      }
+    } catch (e) {
+      console.warn('[SynclyApiClient] Broadcast failed:', e);
+    }
+  }
+
+  private reconnectRealtime() {
+    if (typeof window === 'undefined') return;
+    if (this.realtimeChannel) {
+      supabase.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
+
+    if (!this.currentTenantId) return;
+
+    const topic = `tenant:${this.currentTenantId}:events`;
+    const channel = supabase.channel(topic, {
+      config: {
+        broadcast: { self: false },
+      },
+    });
+
+    const handleBroadcast = (event: string) => (p: any) => {
+      const data = p?.payload || {};
+      this.listeners.get('all')?.forEach((cb) => cb({ type: event, ...data }));
+    };
+
+    channel
+      .on('broadcast', { event: 'MESSAGE_CREATED' }, handleBroadcast('MESSAGE_CREATED'))
+      .on('broadcast', { event: 'POST_CREATED' }, handleBroadcast('POST_CREATED'))
+      .on('broadcast', { event: 'POST_UPDATED' }, handleBroadcast('POST_UPDATED'))
+      .on('broadcast', { event: 'POST_DELETED' }, handleBroadcast('POST_DELETED'))
+      .on('broadcast', { event: 'POST_LIKED' }, handleBroadcast('POST_LIKED'))
+      .on('broadcast', { event: 'COMMENT_CREATED' }, handleBroadcast('COMMENT_CREATED'))
+      .on('broadcast', { event: 'CHANNEL_CREATED' }, handleBroadcast('CHANNEL_CREATED'))
+      .on('broadcast', { event: 'NOTIFICATION_CREATED' }, handleBroadcast('NOTIFICATION_CREATED'))
+      .on('broadcast', { event: 'JOIN_REQUEST_CREATED' }, handleBroadcast('JOIN_REQUEST_CREATED'))
+      .on('broadcast', { event: 'JOIN_REQUEST_UPDATED' }, handleBroadcast('JOIN_REQUEST_UPDATED'));
+
+    channel.subscribe((status, err) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn(`[SynclyRealtime] Realtime subscription status: ${status}`, err);
+      }
+    });
+
+    this.realtimeChannel = channel;
   }
 
   private getHeaders(): HeadersInit {
@@ -308,10 +367,13 @@ class SynclyApiClient {
       if (!json?.data || typeof json.data !== 'object') {
         throw new Error('The server returned an invalid post response.');
       }
-      return {
+      const safePost: Post = {
         ...json.data,
         mediaUrls: normalizeMediaUrls(json.data.mediaUrls),
       };
+      // Broadcast POST_CREATED to connected workspace members
+      void this.broadcastEvent('POST_CREATED', { post: safePost, postId: safePost.id });
+      return safePost;
     } catch (e) {
       console.error('API createPost error:', e);
       return null;
@@ -329,6 +391,7 @@ class SynclyApiClient {
       if (!res.ok) {
         return { success: false, error: json.error || 'Failed to edit post' };
       }
+      void this.broadcastEvent('POST_UPDATED', { post: json.post, postId });
       return { success: true, post: json.post };
     } catch (e: any) {
       console.error('API editPost error:', e);
@@ -346,6 +409,7 @@ class SynclyApiClient {
       if (!res.ok) {
         return { success: false, error: json.error || 'Failed to delete post' };
       }
+      void this.broadcastEvent('POST_DELETED', { postId });
       return { success: true };
     } catch (e: any) {
       console.error('API deletePost error:', e);
@@ -361,6 +425,7 @@ class SynclyApiClient {
       });
       if (!res.ok) throw new Error('Failed to like post');
       const json = await res.json();
+      void this.broadcastEvent('POST_LIKED', { postId, likesCount: json.likesCount, hasLiked: json.hasLiked });
       return { likesCount: json.likesCount, hasLiked: json.hasLiked };
     } catch (e) {
       console.error('API toggleLikePost error:', e);
@@ -377,6 +442,7 @@ class SynclyApiClient {
       });
       if (!res.ok) throw new Error('Failed to add comment');
       const json = await res.json();
+      void this.broadcastEvent('COMMENT_CREATED', { postId, comment: json.data });
       return json.data;
     } catch (e) {
       console.error('API addComment error:', e);
@@ -448,6 +514,9 @@ class SynclyApiClient {
       });
       if (!res.ok) throw new Error('Failed to create channel');
       const json = await res.json();
+      if (json?.data) {
+        void this.broadcastEvent('CHANNEL_CREATED', { channel: json.data });
+      }
       return json.data;
     } catch (e) {
       console.error('API createChannel error:', e);
@@ -540,10 +609,16 @@ class SynclyApiClient {
       if (!res.ok) throw new Error('Failed to send message');
       const json = await res.json();
       if (!json?.data || typeof json.data !== 'object') return null;
-      return {
+      const safeMsg: ChatMessage = {
         ...json.data,
         mediaUrls: normalizeMediaUrls(json.data.mediaUrls),
       };
+      // Broadcast MESSAGE_CREATED to connected workspace members
+      void this.broadcastEvent('MESSAGE_CREATED', {
+        channelId,
+        message: safeMsg,
+      });
+      return safeMsg;
     } catch (e) {
       console.error('API sendMessage error:', e);
       return null;
@@ -647,7 +722,10 @@ class SynclyApiClient {
     }
   }
 
-  // --- REAL-TIME SSE SUBSCRIPTION ---
+  // --- SUPABASE REALTIME EVENT LISTENERS ---
+  // The tenant-scoped Broadcast channel is established by setTenantId().
+  // Do not open the legacy SSE endpoint here: it has no event producer and
+  // only creates long-running Vercel invocations plus a redundant polling fallback.
   public subscribeToEvents(callback: (event: string, data: unknown) => void): () => void {
     const handler = (data: unknown) => callback('EVENT', data);
     if (!this.listeners.has('all')) {
@@ -655,106 +733,11 @@ class SynclyApiClient {
     }
     this.listeners.get('all')!.add(handler);
 
-    if (!this.sseSource) {
-      this.connectSse();
-    }
-
     return () => {
       this.listeners.get('all')?.delete(handler);
     };
   }
 
-  private connectSse() {
-    if (!this.currentTenantId) {
-      if (this.sseSource) {
-        this.sseSource.close();
-        this.sseSource = null;
-      }
-      this.stopPollingFallback();
-      return;
-    }
-    if (typeof window === 'undefined') return;
-
-    try {
-      if (this.sseSource) {
-        this.sseSource.close();
-        this.sseSource = null;
-      }
-
-      if (!('EventSource' in window)) {
-        this.startPollingFallback();
-        return;
-      }
-
-      const cleanTenant = this.currentTenantId.trim();
-      if (!cleanTenant) return;
-      const params = new URLSearchParams({ tenantId: cleanTenant });
-      const sseUrl = `/api/events/stream?${params.toString()}`;
-      const eventSource = new EventSource(sseUrl);
-      this.sseSource = eventSource;
-
-      eventSource.onopen = () => {
-        this.stopPollingFallback();
-      };
-
-      eventSource.onerror = (err) => {
-        console.warn('[SSE] EventSource closed due to error:', err);
-        eventSource.close();
-        if (this.sseSource === eventSource) {
-          this.sseSource = null;
-        }
-        this.startPollingFallback();
-      };
-
-      const forwardEvent = (eventName: string, ev: MessageEvent) => {
-        try {
-          const parsed = JSON.parse(ev.data);
-          this.listeners.get('all')?.forEach((cb) => cb({ type: eventName, ...parsed }));
-        } catch {
-          // ignore parsing error
-        }
-      };
-
-      eventSource.addEventListener('MESSAGE_CREATED', (e) => forwardEvent('MESSAGE_CREATED', e));
-      eventSource.addEventListener('POST_CREATED', (e) => forwardEvent('POST_CREATED', e));
-      eventSource.addEventListener('POST_LIKED', (e) => forwardEvent('POST_LIKED', e));
-      eventSource.addEventListener('COMMENT_CREATED', (e) => forwardEvent('COMMENT_CREATED', e));
-      eventSource.addEventListener('CHANNEL_CREATED', (e) => forwardEvent('CHANNEL_CREATED', e));
-      eventSource.addEventListener('PRESENCE_SYNC', (e) => forwardEvent('PRESENCE_SYNC', e));
-    } catch (e) {
-      console.warn('SSE connection failed, falling back to periodic polling:', e);
-      this.startPollingFallback();
-    }
-  }
-
-  private startPollingFallback() {
-    if (!this.currentTenantId) return;
-    if (this.pollingTimer) return;
-    this.pollingTimer = setInterval(async () => {
-      if (!this.currentTenantId) {
-        this.stopPollingFallback();
-        return;
-      }
-      try {
-        await fetch(`/api/presence?tenantId=${encodeURIComponent(this.currentTenantId)}`, {
-          headers: this.getHeaders(),
-        });
-      } catch {}
-    }, 30000);
-  }
-
-  private stopPollingFallback() {
-    if (this.pollingTimer) {
-      clearInterval(this.pollingTimer);
-      this.pollingTimer = null;
-    }
-  }
-
-  private reconnectSse() {
-    if (typeof window !== 'undefined') {
-      this.connectSse();
-    }
-  }
 }
 
 export const api = new SynclyApiClient();

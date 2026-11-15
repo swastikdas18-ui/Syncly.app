@@ -3,6 +3,7 @@ import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { createAdminClient } from '@/lib/supabase/admin.ts';
 import { checkRateLimit } from '@/lib/rate-limit.ts';
+import { createAndDispatchNotification } from '@/lib/notifications.ts';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -189,6 +190,35 @@ export async function POST(
       }
       return NextResponse.json({ error: 'Failed to queue join request.' }, { status: 500 });
     }
+
+    // Notify workspace admins/owners of the incoming join request
+    await (async () => {
+      try {
+        const { data: admins } = await (adminClient.from('memberships') as any)
+          .select('user_id')
+          .eq('community_id', communityId)
+          .in('role', ['owner', 'admin']);
+
+        const applicantName = auth.fullName || auth.profile?.full_name || email;
+        if (admins && Array.isArray(admins)) {
+          for (const adm of admins) {
+            if (adm.user_id && adm.user_id !== auth.userId) {
+              await createAndDispatchNotification({
+                tenantId: communityId,
+                recipientId: adm.user_id,
+                actorId: auth.userId,
+                type: 'request',
+                title: 'New Workspace Join Request',
+                description: `${applicantName} has requested to join ${tData.name}.`,
+                resourceId: newReq.id,
+              });
+            }
+          }
+        }
+      } catch (notifErr) {
+        console.warn('[API Join] Admin notification failed:', notifErr);
+      }
+    })();
 
     return NextResponse.json({
       success: true,

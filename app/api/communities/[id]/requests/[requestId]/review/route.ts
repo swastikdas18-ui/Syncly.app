@@ -3,6 +3,7 @@ import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { checkRateLimit } from '@/lib/rate-limit.ts';
 import { logAuditEvent } from '@/lib/audit.ts';
+import { createAndDispatchNotification } from '@/lib/notifications.ts';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -135,6 +136,21 @@ export async function POST(
 
     const resultAction = result.action || action;
     const isApproved = resultAction === 'approve' || resultAction === 'approved';
+
+    // Dispatch notification to applicant regarding their request review outcome
+    if (result.applicant_id && result.applicant_id !== auth.userId) {
+      await createAndDispatchNotification({
+        tenantId: result.community_id || communityId,
+        recipientId: result.applicant_id,
+        actorId: auth.userId,
+        type: 'request',
+        title: isApproved ? 'Join Request Approved' : 'Join Request Declined',
+        description: isApproved
+          ? 'Your workspace access request has been approved. Welcome to the workspace!'
+          : 'Your workspace access request was reviewed and declined by an administrator.',
+        resourceId: requestId,
+      });
+    }
 
     return NextResponse.json(
       {

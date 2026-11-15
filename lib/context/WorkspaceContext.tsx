@@ -341,7 +341,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
 
       channel = supabase.channel(`tenant:${tenantId}:presence`, {
         config: {
-          private: true,
           presence: {
             key: `${userId}:${window.crypto.randomUUID()}`,
           },
