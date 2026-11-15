@@ -1,6 +1,7 @@
 /**
- * Normalizes message attachment metadata from the legacy text-backed media_urls column.
- * Database rows may contain JSON text (for example, "[]") while chat components
+ * Normalizes attachment metadata stored in the legacy text-backed media_urls columns.
+ * Both public messages and feed posts store media_urls as TEXT in Production, so
+ * database rows may contain JSON text (for example, "[]") while UI components
  * require a string array. Invalid or unsupported values safely become [].
  */
 export function normalizeMediaUrls(value: unknown): string[] {
