@@ -18,6 +18,7 @@ import {
 import { Channel, ChatMessage, Tenant, PresenceUser } from '../types.ts';
 import { api } from '../lib/api.ts';
 import { normalizeMediaUrls } from '../lib/mediaUrls.ts';
+import { supabase } from '@/lib/supabase.ts';
 import { useAuth } from '@/lib/context/AuthContext.tsx';
 
 interface ChannelChatProps {
@@ -45,10 +46,22 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
   const [newChannelDesc, setNewChannelDesc] = useState('');
   const [newChannelPrivate, setNewChannelPrivate] = useState(false);
 
-  // Supabase Presence State
-  const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([]);
+  // Workspace roster plus live Supabase Realtime Presence.
+  const [workspaceMembers, setWorkspaceMembers] = useState<PresenceUser[]>([]);
+  const [livePresence, setLivePresence] = useState<Record<string, PresenceUser>>({});
+  const [presenceConnectionState, setPresenceConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [myStatus, setMyStatus] = useState<'online' | 'away' | 'busy' | 'offline'>('online');
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const presenceSubscribedRef = useRef(false);
+  const presencePayloadRef = useRef<{
+    userId: string;
+    fullName: string;
+    role: string;
+    status: 'online' | 'away' | 'busy' | 'offline';
+    currentChannelId: string | null;
+    lastSeen: string;
+  } | null>(null);
 
   // Mention Dropdown State
   const [mentionQuery, setMentionQuery] = useState('');
@@ -81,22 +94,160 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
     };
   }, [activeChannelId, activeTenant?.id]);
 
-  // Fetch & Track Presence on tenant change or channel change
+  // Load the verified workspace roster. Presence is overlaid on this full list so
+  // offline colleagues remain visible and can still be mentioned.
   useEffect(() => {
-    let isSubscribed = true;
-    api.getPresence().then((data) => {
-      if (isSubscribed && data) {
-        setPresenceUsers(data);
+    let cancelled = false;
+
+    if (!activeTenant?.id) {
+      setWorkspaceMembers([]);
+      return;
+    }
+
+    api.getWorkspaceMembers(activeTenant.id).then((result) => {
+      if (cancelled) return;
+
+      if (result.status !== 'success') {
+        console.error('[ChannelChat] Could not load workspace member roster:', result.error);
+        setWorkspaceMembers([]);
+        return;
       }
+
+      const members: PresenceUser[] = result.data.map((member: any) => {
+        const fullName = member.name || 'Team Member';
+        return {
+          id: member.id,
+          tenantId: activeTenant.id,
+          fullName,
+          role: member.role || 'member',
+          initials: fullName.split(/\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase() || 'TM',
+          status: 'offline',
+          lastSeen: 'offline',
+        };
+      }).filter((member) => Boolean(member.id));
+
+      setWorkspaceMembers(members);
     });
 
-    // Track active presence in Supabase Realtime channel
-    api.trackPresence(myStatus, activeChannelId);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTenant?.id, session?.user?.id]);
+
+  // Publish presence on one private, tenant-scoped Realtime channel. Access is
+  // checked by RLS against public.memberships for the tenant UUID in the topic.
+  useEffect(() => {
+    if (!activeTenant?.id || !session?.user?.id) {
+      setLivePresence({});
+      setPresenceConnectionState('connecting');
+      return;
+    }
+
+    const tenantId = activeTenant.id;
+    const channel = supabase.channel(`tenant:${tenantId}:presence`, {
+      config: {
+        private: true,
+        presence: {
+          key: `${session.user.id}:${window.crypto.randomUUID()}`,
+        },
+      },
+    });
+
+    presenceChannelRef.current = channel;
+    presenceSubscribedRef.current = false;
+    setPresenceConnectionState('connecting');
+
+    const syncPresence = () => {
+      const state = channel.presenceState<{
+        userId: string;
+        fullName: string;
+        role: string;
+        status: 'online' | 'away' | 'busy' | 'offline';
+        currentChannelId: string | null;
+        lastSeen: string;
+      }>();
+
+      const snapshot: Record<string, PresenceUser> = {};
+      Object.values(state).flat().forEach((presence) => {
+        if (!presence.userId) return;
+        snapshot[presence.userId] = {
+          id: presence.userId,
+          tenantId,
+          fullName: presence.fullName || 'Team Member',
+          role: presence.role || 'member',
+          initials: (presence.fullName || 'TM').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase(),
+          status: presence.status || 'online',
+          currentChannelId: presence.currentChannelId || undefined,
+          lastSeen: presence.lastSeen || new Date().toISOString(),
+        };
+      });
+      setLivePresence(snapshot);
+    };
+
+    channel
+      .on('presence', { event: 'sync' }, syncPresence)
+      .on('presence', { event: 'join' }, syncPresence)
+      .on('presence', { event: 'leave' }, syncPresence)
+      .subscribe(async (status, error) => {
+        if (status === 'SUBSCRIBED') {
+          presenceSubscribedRef.current = true;
+          setPresenceConnectionState('connected');
+          const payload = presencePayloadRef.current;
+          if (payload) {
+            const { error: trackError } = await channel.track(payload);
+            if (trackError) console.error('[ChannelChat] Presence track failed:', trackError);
+          }
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          presenceSubscribedRef.current = false;
+          setPresenceConnectionState('error');
+          console.error('[ChannelChat] Presence channel subscription failed:', error);
+        }
+      });
 
     return () => {
-      isSubscribed = false;
+      presenceSubscribedRef.current = false;
+      if (presenceChannelRef.current === channel) {
+        presenceChannelRef.current = null;
+      }
+      void channel.untrack().catch(() => {});
+      void supabase.removeChannel(channel);
+      setLivePresence({});
     };
-  }, [activeTenant?.id, activeChannelId, myStatus]);
+  }, [activeTenant?.id, session?.user?.id]);
+
+  // Update our presence payload when the user changes status or switches channels.
+  useEffect(() => {
+    if (!activeTenant?.id || !session?.user?.id) return;
+
+    const fullName = profile?.full_name || session.user.fullName || 'Team Member';
+    const payload = {
+      userId: session.user.id,
+      fullName,
+      role: profile?.role || session.user.role || 'member',
+      status: myStatus,
+      currentChannelId: currentChannel?.name || null,
+      lastSeen: new Date().toISOString(),
+    };
+    presencePayloadRef.current = payload;
+
+    if (presenceSubscribedRef.current && presenceChannelRef.current) {
+      void presenceChannelRef.current.track(payload).then(({ error }) => {
+        if (error) console.error('[ChannelChat] Presence update failed:', error);
+      });
+    }
+  }, [activeTenant?.id, session?.user?.id, session?.user?.fullName, session?.user?.role, profile?.full_name, profile?.role, myStatus, activeChannelId, currentChannel?.name]);
+
+  const presenceUsers: PresenceUser[] = workspaceMembers.map((member) => {
+    const live = livePresence[member.id];
+    const isSelf = member.id === session?.user?.id;
+    return {
+      ...member,
+      fullName: isSelf ? `${member.fullName.replace(/\s*\(You\)$/, '')} (You)` : member.fullName,
+      status: live?.status || 'offline',
+      currentChannelId: live?.currentChannelId,
+      lastSeen: live?.lastSeen || 'offline',
+    };
+  });
 
   // Real-time listener for incoming messages & presence sync
   useEffect(() => {
@@ -105,7 +256,6 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
         type?: string; 
         channelId?: string; 
         message?: ChatMessage;
-        presence?: PresenceUser[];
       };
 
       if (payload.type === 'MESSAGE_CREATED' && payload.channelId === activeChannelId && payload.message) {
@@ -120,9 +270,6 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
         scrollToBottom();
       }
 
-      if (payload.type === 'PRESENCE_SYNC' && payload.presence) {
-        setPresenceUsers(payload.presence);
-      }
     });
 
     return () => unsubscribe();
@@ -633,8 +780,16 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
               <div className="hidden sm:block h-3 w-px bg-slate-200" />
               <div className="flex items-center gap-1.5 font-mono text-[11px] text-emerald-600">
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="hidden sm:inline">Realtime Synced</span>
-                <span className="sm:hidden">Live</span>
+                <span className="hidden sm:inline">
+                  {presenceConnectionState === 'connected'
+                    ? 'Realtime Synced'
+                    : presenceConnectionState === 'connecting'
+                      ? 'Connecting Presence…'
+                      : 'Presence Unavailable'}
+                </span>
+                <span className="sm:hidden">
+                  {presenceConnectionState === 'connected' ? 'Live' : 'Offline'}
+                </span>
               </div>
             </div>
           </div>
