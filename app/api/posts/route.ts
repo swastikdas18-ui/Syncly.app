@@ -293,7 +293,7 @@ export async function POST(request: NextRequest) {
 
     // If the post is an announcement, notify workspace members
     if (newPostRow.category === 'announcement') {
-      void (async () => {
+      await (async () => {
         try {
           const { data: members } = await (supabase.from('memberships') as any)
             .select('user_id')
