@@ -75,7 +75,6 @@ export default function FeedDashboardPage() {
               ? {
                   ...p,
                   likesCount: payload.likesCount !== undefined ? payload.likesCount : p.likesCount,
-                  hasLiked: payload.hasLiked !== undefined ? payload.hasLiked : p.hasLiked,
                 }
               : p
           )
