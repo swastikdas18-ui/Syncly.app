@@ -4,6 +4,7 @@ import { checkRateLimit } from '@/lib/rate-limit.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { ChatMessage } from '@/src/types.ts';
 import { normalizeMediaUrls } from '@/src/lib/mediaUrls.ts';
+import { createAndDispatchNotification } from '@/lib/notifications.ts';
 
 interface RouteContext {
   params: Promise<{ channelId: string }>;
@@ -198,6 +199,57 @@ export async function POST(request: NextRequest, context: RouteContext) {
       createdAt: newMsg.created_at,
       status: 'sent',
     };
+
+    // Parse @mentions and notify mentioned workspace members
+    const mentionMatches = content.match(/@([a-zA-Z0-9_.-]+)/g);
+    if (mentionMatches && mentionMatches.length > 0) {
+      void (async () => {
+        try {
+          const mentionedTerms = Array.from(
+            new Set(mentionMatches.map((m: string) => m.slice(1).toLowerCase().replace(/_/g, ' ')))
+          );
+
+          // Get tenant members
+          const { data: members } = await (supabase.from('memberships') as any)
+            .select(`
+              user_id,
+              profiles:user_id (
+                id,
+                full_name
+              )
+            `)
+            .eq('community_id', effectiveTenantId);
+
+          if (members && Array.isArray(members)) {
+            for (const member of members) {
+              const prof = member.profiles || {};
+              const memberName = (prof.full_name || '').toLowerCase();
+              const memberId = member.user_id;
+
+              if (memberId && memberId !== auth.userId && memberName) {
+                const isMentioned = mentionedTerms.some((term: string) =>
+                  memberName.includes(term) || term.includes(memberName)
+                );
+
+                if (isMentioned) {
+                  await createAndDispatchNotification({
+                    tenantId: effectiveTenantId,
+                    recipientId: memberId,
+                    actorId: auth.userId,
+                    type: 'message',
+                    title: `Mentioned in #${channelId}`,
+                    description: `${authorName} mentioned you in #${channelId}: "${content.length > 60 ? content.slice(0, 57) + '...' : content}"`,
+                    resourceId: newMsg.id,
+                  });
+                }
+              }
+            }
+          }
+        } catch (mentionErr) {
+          console.warn('[Messages] Failed to dispatch mention notifications:', mentionErr);
+        }
+      })();
+    }
 
     return NextResponse.json({ success: true, data: formattedMessage }, { status: 201 });
   } catch {

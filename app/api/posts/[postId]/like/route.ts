@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { createAdminClient } from '@/lib/supabase/admin.ts';
+import { createAndDispatchNotification } from '@/lib/notifications.ts';
 
 interface RouteContext {
   params: Promise<{ postId: string }>;
@@ -41,12 +42,42 @@ export async function POST(request: NextRequest, context: RouteContext) {
     p_action: desiredAction,
   });
 
+  // Helper to notify post author when liked
+  const notifyAuthorIfLiked = async (liked: boolean) => {
+    if (!liked) return;
+    try {
+      const { data: postRow } = await (supabase.from('posts') as any)
+        .select('author_id, title')
+        .eq('id', postId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      if (postRow?.author_id && postRow.author_id !== userId) {
+        const actorName = auth.fullName || auth.profile?.full_name || 'A team member';
+        void createAndDispatchNotification({
+          tenantId,
+          recipientId: postRow.author_id,
+          actorId: userId,
+          type: 'announcement',
+          title: 'Reaction on Your Post',
+          description: `${actorName} liked your post${postRow.title ? ` "${postRow.title}"` : ''}.`,
+          resourceId: postId,
+        });
+      }
+    } catch (e) {
+      console.warn('[Reactions] Failed to dispatch like notification:', e);
+    }
+  };
+
   if (!rpcError && rpcResult) {
     if (!rpcResult.success) {
       return NextResponse.json(
         { error: rpcResult.error || 'Reaction update failed.' },
         { status: rpcResult.status || 400 }
       );
+    }
+    if (rpcResult.hasLiked) {
+      void notifyAuthorIfLiked(true);
     }
     return NextResponse.json({
       success: true,
@@ -134,6 +165,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     await (adminClient.from('posts') as any)
       .update({ likes_count: safeCount })
       .eq('id', postId);
+
+    if (hasLiked) {
+      void notifyAuthorIfLiked(true);
+    }
 
     return NextResponse.json({
       success: true,
