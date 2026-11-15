@@ -41,6 +41,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
   const [inputContent, setInputContent] = useState('');
   const [mediaAttachments, setMediaAttachments] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [mediaUploadError, setMediaUploadError] = useState<string | null>(null);
   const [isNewChannelModalOpen, setIsNewChannelModalOpen] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDesc, setNewChannelDesc] = useState('');
@@ -325,6 +326,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
 
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    setMediaUploadError(null);
     setIsUploading(true);
     for (let i = 0; i < files.length; i++) {
       try {
@@ -334,6 +336,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
         }
       } catch (err) {
         console.error('Chat upload failed:', err);
+        setMediaUploadError(err instanceof Error ? err.message : 'Image upload failed. Please try again.');
       }
     }
     setIsUploading(false);
@@ -865,6 +868,11 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
 
           {/* Sticky Message Composer */}
           <div className="p-2.5 sm:p-4 border-t border-slate-800/80 bg-slate-900/60 backdrop-blur-lg pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-4">
+            {mediaUploadError && (
+              <div role="alert" className="max-w-4xl mx-auto mb-2 text-xs text-rose-300 bg-rose-950/30 border border-rose-500/30 rounded-lg px-3 py-2">
+                {mediaUploadError}
+              </div>
+            )}
             {mediaAttachments.length > 0 && (
               <div className="flex items-center gap-2 mb-2">
                 {mediaAttachments.map((url, i) => (
