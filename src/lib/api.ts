@@ -1,5 +1,6 @@
 import { Post, Channel, ChatMessage, Tenant, PostComment, IsolationAuditResult, PostCategory, PresenceUser } from '../types.ts';
 import { resolveTenantId } from './tenantContext.ts';
+import { normalizeMediaUrls } from './mediaUrls.ts';
 
 class SynclyApiClient {
   private currentTenantId: string | null = null;
@@ -505,7 +506,11 @@ class SynclyApiClient {
       const res = await fetch(`/api/channels/${channelId}/messages`, { headers: this.getHeaders() });
       if (!res.ok) throw new Error('Failed to fetch messages');
       const json = await res.json();
-      return json.data;
+      const rows = Array.isArray(json?.data) ? json.data : [];
+      return rows.map((message: any) => ({
+        ...message,
+        mediaUrls: normalizeMediaUrls(message?.mediaUrls),
+      }));
     } catch (e) {
       console.warn('API getMessages error:', e);
       return [];
@@ -521,7 +526,11 @@ class SynclyApiClient {
       });
       if (!res.ok) throw new Error('Failed to send message');
       const json = await res.json();
-      return json.data;
+      if (!json?.data || typeof json.data !== 'object') return null;
+      return {
+        ...json.data,
+        mediaUrls: normalizeMediaUrls(json.data.mediaUrls),
+      };
     } catch (e) {
       console.error('API sendMessage error:', e);
       return null;

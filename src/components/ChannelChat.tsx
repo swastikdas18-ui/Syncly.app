@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Channel, ChatMessage, Tenant, PresenceUser } from '../types.ts';
 import { api } from '../lib/api.ts';
+import { normalizeMediaUrls } from '../lib/mediaUrls.ts';
 import { useAuth } from '@/lib/context/AuthContext.tsx';
 
 interface ChannelChatProps {
@@ -70,7 +71,7 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
     if (activeChannelId) {
       api.getMessages(activeChannelId).then((data) => {
         if (isSubscribed) {
-          setMessages(data);
+          setMessages(data.map((message) => ({ ...message, mediaUrls: normalizeMediaUrls(message.mediaUrls) })));
           scrollToBottom();
         }
       });
@@ -108,9 +109,13 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
       };
 
       if (payload.type === 'MESSAGE_CREATED' && payload.channelId === activeChannelId && payload.message) {
+        const incomingMessage = {
+          ...payload.message,
+          mediaUrls: normalizeMediaUrls(payload.message.mediaUrls),
+        };
         setMessages((prev) => {
-          if (prev.some((m) => m.id === payload.message?.id)) return prev;
-          return [...prev, payload.message!];
+          if (prev.some((m) => m.id === incomingMessage.id)) return prev;
+          return [...prev, incomingMessage];
         });
         scrollToBottom();
       }
@@ -650,6 +655,8 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                 const isSameAuthor = prevMsg && prevMsg.userId === msg.userId && 
                   Math.abs(new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime()) < 300000;
 
+                const messageMediaUrls = normalizeMediaUrls(msg.mediaUrls);
+
                 return (
                   <div key={msg.id} className={`flex items-start gap-3 ${isSameAuthor ? 'mt-1' : 'mt-4'}`}>
                     {!isSameAuthor ? (
@@ -677,9 +684,9 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
                       </div>
 
                       {/* Attachments */}
-                      {msg.mediaUrls && msg.mediaUrls.length > 0 && (
+                      {messageMediaUrls.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {msg.mediaUrls.map((url, i) => (
+                          {messageMediaUrls.map((url, i) => (
                             <img 
                               key={i} 
                               src={url} 

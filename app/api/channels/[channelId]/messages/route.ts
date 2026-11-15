@@ -3,6 +3,7 @@ import { getVerifiedAuthContext } from '@/lib/auth/server.ts';
 import { checkRateLimit } from '@/lib/rate-limit.ts';
 import { createClient } from '@/lib/supabase/server.ts';
 import { ChatMessage } from '@/src/types.ts';
+import { normalizeMediaUrls } from '@/src/lib/mediaUrls.ts';
 
 interface RouteContext {
   params: Promise<{ channelId: string }>;
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       userRole: author.role || 'employee',
       userInitials: authorInitials,
       content: m.content,
-      mediaUrls: m.media_urls || [],
+      mediaUrls: normalizeMediaUrls(m.media_urls),
       createdAt: m.created_at,
       status: 'sent',
     };
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const mediaUrls = Array.isArray(body.mediaUrls) ? body.mediaUrls : [];
+    const mediaUrls = normalizeMediaUrls(body?.mediaUrls);
     const supabase = await createClient(request);
 
     const { data: newMsg, error } = await (supabase.from('messages') as any)
@@ -150,7 +151,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         channel_id: channelId,
         user_id: auth.userId,
         content,
-        media_urls: mediaUrls,
+        // The production schema stores media_urls as TEXT, so persist a JSON string.
+        media_urls: JSON.stringify(mediaUrls),
       })
       .select(`
         id,
@@ -192,7 +194,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       userRole: author.role || auth.role || 'employee',
       userInitials: authorInitials,
       content: newMsg.content,
-      mediaUrls: newMsg.media_urls || [],
+      mediaUrls: normalizeMediaUrls(newMsg.media_urls),
       createdAt: newMsg.created_at,
       status: 'sent',
     };
