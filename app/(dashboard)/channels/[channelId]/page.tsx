@@ -87,6 +87,24 @@ export default function ChannelDashboardPage() {
     }
   }, [channelId]);
 
+  // Keep the channel sidebar in sync when another workspace member creates a channel.
+  useEffect(() => {
+    if (!verifiedWorkspace?.id) return;
+
+    const unsubscribe = api.subscribeToEvents((_event, data) => {
+      const payload = data as { type?: string; channel?: Channel };
+      if (payload.type !== 'CHANNEL_CREATED' || !payload.channel) return;
+
+      setChannels((prev) => {
+        if (prev.some((channel) => channel.id === payload.channel!.id)) return prev;
+        return [...prev, payload.channel!];
+      });
+    });
+
+    return () => unsubscribe();
+  }, [verifiedWorkspace?.id]);
+
+
   // 1. Loading State (Context or Channel Fetching)
   if (isMembershipLoading) {
     return (
