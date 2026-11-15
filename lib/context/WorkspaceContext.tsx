@@ -279,6 +279,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
     const startWorkspacePresence = async () => {
       const tenantId = activeCommunity?.id;
       if (!tenantId) {
+        setMyPresenceChannelName(null);
         setWorkspaceMembers([]);
         setLivePresence({});
         setPresenceUserId(null);
@@ -287,6 +288,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
         return;
       }
 
+      setMyPresenceChannelName(null);
       setPresenceConnectionState('connecting');
       const { data: { session } } = await supabase.auth.getSession();
       if (cancelled) return;
