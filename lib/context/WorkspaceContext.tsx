@@ -67,7 +67,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
     const isSelf = member.id === presenceUserId;
     return {
       ...member,
-      fullName: isSelf ? `${member.fullName.replace(/\\s*\\(You\\)$/, '')} (You)` : member.fullName,
+      fullName: isSelf ? `${member.fullName.replace(/\s*\(You\)$/, '')} (You)` : member.fullName,
       status: live?.status || 'offline',
       currentChannelId: live?.currentChannelId,
       lastSeen: live?.lastSeen || 'offline',
@@ -311,7 +311,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
             tenantId,
             fullName,
             role: member.role || 'member',
-            initials: fullName.split(/\\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase() || 'TM',
+            initials: fullName.split(/\s+/).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase() || 'TM',
             status: 'offline',
             lastSeen: 'offline',
           };
@@ -365,7 +365,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
             tenantId,
             fullName: presence.fullName || 'Team Member',
             role: presence.role || 'member',
-            initials: (presence.fullName || 'TM').split(/\\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'TM',
+            initials: (presence.fullName || 'TM').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'TM',
             status: presence.status || 'online',
             currentChannelId: presence.currentChannelId || undefined,
             lastSeen: presence.lastSeen || new Date().toISOString(),
