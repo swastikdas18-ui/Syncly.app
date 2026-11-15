@@ -95,7 +95,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // If the commenter is not the post author, notify the post author
     if (post.author_id && post.author_id !== auth.userId) {
-      void createAndDispatchNotification({
+      await createAndDispatchNotification({
         tenantId,
         recipientId: post.author_id,
         actorId: auth.userId,
