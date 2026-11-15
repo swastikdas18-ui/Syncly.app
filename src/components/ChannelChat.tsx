@@ -194,8 +194,10 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
           setPresenceConnectionState('connected');
           const payload = presencePayloadRef.current;
           if (payload) {
-            const { error: trackError } = await channel.track(payload);
-            if (trackError) console.error('[ChannelChat] Presence track failed:', trackError);
+            const trackStatus = await channel.track(payload);
+            if (trackStatus !== 'ok') {
+              console.error('[ChannelChat] Presence track failed:', trackStatus);
+            }
           }
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           presenceSubscribedRef.current = false;
@@ -231,8 +233,10 @@ export const ChannelChat: React.FC<ChannelChatProps> = ({
     presencePayloadRef.current = payload;
 
     if (presenceSubscribedRef.current && presenceChannelRef.current) {
-      void presenceChannelRef.current.track(payload).then(({ error }) => {
-        if (error) console.error('[ChannelChat] Presence update failed:', error);
+      void presenceChannelRef.current.track(payload).then((trackStatus) => {
+        if (trackStatus !== 'ok') {
+          console.error('[ChannelChat] Presence update failed:', trackStatus);
+        }
       });
     }
   }, [activeTenant?.id, session?.user?.id, session?.user?.fullName, session?.user?.role, profile?.full_name, profile?.role, myStatus, activeChannelId, currentChannel?.name]);
