@@ -690,15 +690,15 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                 )}
 
                 {/* Media Gallery Grid */}
-                {post.mediaUrls && post.mediaUrls.length > 0 && (
+                {postMediaUrls.length > 0 && (
                   <div className={`mb-4 rounded-xl overflow-hidden border border-slate-800 grid gap-1.5 ${
-                    post.mediaUrls.length === 1 
+                    postMediaUrls.length === 1 
                       ? 'grid-cols-1' 
-                      : post.mediaUrls.length === 2 
+                      : postMediaUrls.length === 2 
                         ? 'grid-cols-2' 
                         : 'grid-cols-2 sm:grid-cols-3'
                   }`}>
-                    {post.mediaUrls.map((url, idx) => (
+                    {postMediaUrls.map((url, idx) => (
                       <div 
                         key={idx} 
                         onClick={() => setLightboxUrl(url)}
