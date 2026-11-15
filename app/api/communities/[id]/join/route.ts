@@ -192,7 +192,7 @@ export async function POST(
     }
 
     // Notify workspace admins/owners of the incoming join request
-    void (async () => {
+    await (async () => {
       try {
         const { data: admins } = await (adminClient.from('memberships') as any)
           .select('user_id')
