@@ -127,9 +127,39 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
         setAllCommunities(tenantsRes);
       }
 
+      // If the server endpoint reports an empty/error result, re-check the caller's own
+      // memberships directly through the authenticated browser client. RLS still limits
+      // this query to memberships visible to the signed-in user.
+      let resolvedMembershipResult = memResult;
+      if (memResult.status === 'empty' || memResult.status === 'error') {
+        try {
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          const currentUserId = currentSession?.user?.id;
+          if (currentUserId) {
+            const { data: directMemberships, error: directMembershipError } = await supabase
+              .from('memberships')
+              .select('id, user_id, community_id, role, joined_at')
+              .eq('user_id', currentUserId);
+
+            if (!directMembershipError) {
+              const verifiedRows = (directMemberships || []) as unknown as any[];
+              resolvedMembershipResult = {
+                status: verifiedRows.length > 0 ? 'success' : 'empty',
+                data: verifiedRows,
+                statusCode: 200,
+              };
+            } else {
+              console.warn('[WorkspaceContext] Direct membership fallback failed:', directMembershipError);
+            }
+          }
+        } catch (fallbackError) {
+          console.warn('[WorkspaceContext] Direct membership fallback threw:', fallbackError);
+        }
+      }
+
       // Handle structured membership result
-      if (memResult.status === 'success') {
-        const enrichedJoined: JoinedCommunity[] = memResult.data.map((m: any) => ({
+      if (resolvedMembershipResult.status === 'success') {
+        const enrichedJoined: JoinedCommunity[] = resolvedMembershipResult.data.map((m: any) => ({
           ...(m.community || tenantsRes.find((t: any) => t.id === (m.community_id || m.communityId)) || {
             id: m.community_id || m.communityId,
             name: 'Workspace',
@@ -154,25 +184,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
           // If no previous active or previous active is no longer a verified membership, select first verified
           syncActiveCommunity(enrichedJoined[0] || null);
         }
-      } else if (memResult.status === 'empty') {
+      } else if (resolvedMembershipResult.status === 'empty') {
         // Authenticated user holds 0 memberships (legitimate empty state)
         setJoinedCommunities([]);
         setMembershipStatus('empty');
         syncActiveCommunity(null);
-      } else if (memResult.status === 'unauthorized') {
+      } else if (resolvedMembershipResult.status === 'unauthorized') {
         setJoinedCommunities([]);
         setMembershipStatus('unauthorized');
-        setMembershipError(memResult.error || 'Authentication required.');
+        setMembershipError(resolvedMembershipResult.error || 'Authentication required.');
         syncActiveCommunity(null);
-      } else if (memResult.status === 'forbidden') {
+      } else if (resolvedMembershipResult.status === 'forbidden') {
         setJoinedCommunities([]);
         setMembershipStatus('forbidden');
-        setMembershipError(memResult.error || 'Access forbidden.');
+        setMembershipError(resolvedMembershipResult.error || 'Access forbidden.');
         syncActiveCommunity(null);
       } else {
         // Error state: server or network failure (DO NOT treat as empty / zero memberships)
         setMembershipStatus('error');
-        setMembershipError(memResult.error || 'Failed to load memberships.');
+        setMembershipError(resolvedMembershipResult.error || 'Failed to load memberships.');
         // Do not overwrite previous active workspace with empty state on temporary error
       }
     } catch (err: any) {
@@ -263,7 +293,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode; initialCom
 
   const joinCommunity = useCallback(async (communityId: string, options?: { message?: string }) => {
     const res = await api.joinCommunity(communityId, options || {});
-    if (res.status === 'joined' && res.tenant) {
+    // The join API returns tenantId (not a nested tenant object). Refresh for every
+    // joined response, including HTTP 409 "already a member", so stale UI state is repaired.
+    if (res.status === 'joined') {
       await refreshMemberships();
     }
     return res;
