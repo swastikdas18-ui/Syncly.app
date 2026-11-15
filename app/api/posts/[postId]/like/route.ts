@@ -167,7 +167,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .eq('id', postId);
 
     if (hasLiked) {
-      void notifyAuthorIfLiked(true);
+      await notifyAuthorIfLiked(true);
     }
 
     return NextResponse.json({
