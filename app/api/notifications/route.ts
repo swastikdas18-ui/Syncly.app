@@ -32,12 +32,7 @@ export async function GET(request: NextRequest) {
         description,
         resource_id,
         read,
-        created_at,
-        actor:actor_id (
-          id,
-          full_name,
-          avatar_url
-        )
+        created_at
       `)
       .eq('tenant_id', tenantId)
       .eq('recipient_id', userId)
@@ -57,12 +52,33 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch notifications: ' + error.message }, { status: 500 });
     }
 
+    const actorIds = Array.from(new Set(
+      (rows || [])
+        .map((n: any) => n.actor_id)
+        .filter((id: unknown): id is string => typeof id === 'string')
+    ));
+    const actorsById = new Map<string, { full_name?: string | null; avatar_url?: string | null }>();
+
+    if (actorIds.length > 0) {
+      const { data: actors, error: actorsError } = await (supabase.from('profiles') as any)
+        .select('id, full_name, avatar_url')
+        .in('id', actorIds);
+
+      if (actorsError) {
+        console.warn('[Notifications] Failed to load actor profile details:', actorsError);
+      } else {
+        for (const actor of actors || []) {
+          actorsById.set(actor.id, actor);
+        }
+      }
+    }
+
     const formatted = (rows || []).map((n: any) => ({
       id: n.id,
       tenantId: n.tenant_id,
       recipientId: n.recipient_id,
       actorId: n.actor_id || undefined,
-      actorName: n.actor?.full_name || undefined,
+      actorName: actorsById.get(n.actor_id)?.full_name || undefined,
       type: n.type,
       title: n.title,
       description: n.description,
