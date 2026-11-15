@@ -203,7 +203,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Parse @mentions and notify mentioned workspace members
     const mentionMatches = content.match(/@([a-zA-Z0-9_.-]+)/g);
     if (mentionMatches && mentionMatches.length > 0) {
-      void (async () => {
+      await (async () => {
         try {
           const mentionedTerms = Array.from(
             new Set(mentionMatches.map((m: string) => m.slice(1).toLowerCase().replace(/_/g, ' ')))
