@@ -278,7 +278,11 @@ class SynclyApiClient {
       const res = await fetch(url.toString(), { headers: this.getHeaders() });
       if (!res.ok) throw new Error('Failed to fetch posts');
       const json = await res.json();
-      return json.data;
+      const rows = Array.isArray(json?.data) ? json.data : [];
+      return rows.map((post: any) => ({
+        ...post,
+        mediaUrls: normalizeMediaUrls(post?.mediaUrls),
+      }));
     } catch (e) {
       console.warn('API getPosts error:', e);
       return [];
@@ -297,9 +301,17 @@ class SynclyApiClient {
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Failed to create post');
-      const json = await res.json();
-      return json.data;
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error || `Failed to create post (HTTP ${res.status})`);
+      }
+      if (!json?.data || typeof json.data !== 'object') {
+        throw new Error('The server returned an invalid post response.');
+      }
+      return {
+        ...json.data,
+        mediaUrls: normalizeMediaUrls(json.data.mediaUrls),
+      };
     } catch (e) {
       console.error('API createPost error:', e);
       return null;

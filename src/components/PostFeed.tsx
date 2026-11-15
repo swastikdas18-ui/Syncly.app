@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Post, PostCategory, Tenant, PostComment } from '../types.ts';
 import { api } from '../lib/api.ts';
+import { normalizeMediaUrls } from '../lib/mediaUrls.ts';
 
 interface PostFeedProps {
   posts: Post[];
@@ -64,6 +65,7 @@ export const PostFeed: React.FC<PostFeedProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   // Active edit state per post
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
@@ -147,29 +149,45 @@ export const PostFeed: React.FC<PostFeedProps> = ({
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || isSubmitting) return;
+    if (!content.trim() || isSubmitting || isUploading) return;
 
     if (activeTenant?.id) {
       api.setTenantId(activeTenant.id);
     }
 
     setIsSubmitting(true);
-    const result = await api.createPost({
-      title: title.trim(),
-      content: content.trim(),
-      category,
-      mediaUrls,
-    });
+    setPublishError(null);
 
-    if (result) {
-      onPostCreated(result);
+    try {
+      const result = await api.createPost({
+        title: title.trim(),
+        content: content.trim(),
+        category,
+        mediaUrls: normalizeMediaUrls(mediaUrls),
+      });
+
+      if (!result) {
+        setPublishError('Your update was not published. Your draft and attachments have been kept; please retry.');
+        return;
+      }
+
+      const safePost = {
+        ...result,
+        mediaUrls: normalizeMediaUrls(result.mediaUrls),
+      };
+      onPostCreated(safePost);
       setTitle('');
       setContent('');
       setCategory('general');
       setMediaUrls([]);
       setIsComposerExpanded(false);
+      setPublishError(null);
+    } catch (error) {
+      console.error('[PostFeed] Publish failed:', error);
+      setPublishError(error instanceof Error ? error.message : 'Unable to publish this update. Your draft has been kept.');
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   const handleToggleLike = async (postId: string) => {
@@ -465,9 +483,16 @@ export const PostFeed: React.FC<PostFeedProps> = ({
             </div>
 
             {uploadError && (
-              <div className="flex items-center gap-2 text-xs text-rose-600 bg-rose-50 p-2 rounded">
+              <div role="alert" className="flex items-center gap-2 text-xs text-rose-300 bg-rose-950/30 border border-rose-500/30 p-2 rounded">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{uploadError}</span>
+              </div>
+            )}
+
+            {publishError && (
+              <div role="alert" className="flex items-center gap-2 text-xs text-rose-300 bg-rose-950/30 border border-rose-500/30 p-2 rounded">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{publishError}</span>
               </div>
             )}
 
@@ -557,6 +582,8 @@ export const PostFeed: React.FC<PostFeedProps> = ({
       ) : (
         <div className="space-y-4">
           {filteredPosts.map((post) => {
+            // Older rows can contain JSON text because posts.media_urls is TEXT.
+            const postMediaUrls = normalizeMediaUrls(post.mediaUrls);
             const isCommentsOpen = Boolean(expandedComments[post.id]);
             return (
               <article 
@@ -663,15 +690,15 @@ export const PostFeed: React.FC<PostFeedProps> = ({
                 )}
 
                 {/* Media Gallery Grid */}
-                {post.mediaUrls && post.mediaUrls.length > 0 && (
+                {postMediaUrls.length > 0 && (
                   <div className={`mb-4 rounded-xl overflow-hidden border border-slate-800 grid gap-1.5 ${
-                    post.mediaUrls.length === 1 
+                    postMediaUrls.length === 1 
                       ? 'grid-cols-1' 
-                      : post.mediaUrls.length === 2 
+                      : postMediaUrls.length === 2 
                         ? 'grid-cols-2' 
                         : 'grid-cols-2 sm:grid-cols-3'
                   }`}>
-                    {post.mediaUrls.map((url, idx) => (
+                    {postMediaUrls.map((url, idx) => (
                       <div 
                         key={idx} 
                         onClick={() => setLightboxUrl(url)}
