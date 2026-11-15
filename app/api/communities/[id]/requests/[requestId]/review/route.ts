@@ -139,7 +139,7 @@ export async function POST(
 
     // Dispatch notification to applicant regarding their request review outcome
     if (result.applicant_id && result.applicant_id !== auth.userId) {
-      void createAndDispatchNotification({
+      await createAndDispatchNotification({
         tenantId: result.community_id || communityId,
         recipientId: result.applicant_id,
         actorId: auth.userId,
