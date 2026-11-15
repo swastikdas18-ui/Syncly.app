@@ -29,16 +29,9 @@ export interface NotificationItem {
  * Format notification description derived strictly from the notification record
  * and associated actor/recipient identities.
  */
-export function formatNotificationDescription(
-  item: NotificationItem,
-  currentUserId?: string | null
-): string {
-  if (item.type === 'message' && item.actorName) {
-    if (currentUserId && item.actorId && item.actorId === currentUserId) {
-      return "You mentioned team members in the channel thread.";
-    }
-    return `${item.actorName} mentioned you in the announcement channel thread.`;
-  }
+export function formatNotificationDescription(item: NotificationItem): string {
+  // Notification descriptions are authored by the event producer. Do not turn
+  // comments or chat mentions into a hard-coded generic message.
   return item.description;
 }
 
@@ -60,7 +53,14 @@ export default function NotificationsPage() {
         if (res.ok) {
           const json = await res.json();
           if (isMounted) {
-            setNotifications(json.data || []);
+            const incoming = Array.isArray(json.data) ? json.data as NotificationItem[] : [];
+            setNotifications((current) => {
+              const currentIds = new Set(current.map((item) => item.id));
+              return [
+                ...current,
+                ...incoming.filter((item) => !currentIds.has(item.id)),
+              ];
+            });
           }
         }
       } catch (err) {
@@ -201,7 +201,7 @@ export default function NotificationsPage() {
                   <span className="text-[11px] text-slate-500 shrink-0">{notif.time}</span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                  {formatNotificationDescription(notif, profile?.id)}
+                  {formatNotificationDescription(notif)}
                 </p>
               </div>
 
