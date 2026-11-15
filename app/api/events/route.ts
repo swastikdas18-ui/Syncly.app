@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Notify workspace members about new all-hands/company events
-    void (async () => {
+    await (async () => {
       try {
         const { data: members } = await (supabase.from('memberships') as any)
           .select('user_id')
