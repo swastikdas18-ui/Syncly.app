@@ -69,30 +69,27 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient(request);
 
-    // 5. Generate short-lived signed URL (3600 seconds = 1 hour)
+    // Create a short-lived signed URL and redirect the browser to the private
+    // Storage object. This keeps the persisted message URL stable while ensuring
+    // the file bytes never pass through the Vercel Function response.
     const { data, error } = await supabase.storage
       .from('community-media')
-      .createSignedUrl(key, 60);
+      .createSignedUrl(key, 300);
 
     if (error || !data?.signedUrl) {
-      // In offline / staging mock mode, return an authenticated asset descriptor
-      return NextResponse.json({
-        success: true,
-        key,
-        tenantId: targetTenantId,
-        authorizedUser: auth.userId,
-        signedUrl: `https://staging-storage.internal/community-media/${encodeURIComponent(key)}?token=st_signed_${auth.userId.slice(0, 8)}`,
-        expiresIn: 60,
-      });
+      console.error('[media/download] Signed URL creation failed:', error);
+      return NextResponse.json(
+        { error: 'Media file is unavailable or you no longer have access to it.' },
+        { status: 404, headers: { 'Cache-Control': 'private, no-store' } }
+      );
     }
 
-    return NextResponse.json({
-      success: true,
-      key,
-      tenantId: targetTenantId,
-      authorizedUser: auth.userId,
-      signedUrl: data.signedUrl,
-      expiresIn: 60,
+    return NextResponse.redirect(data.signedUrl, {
+      status: 302,
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Referrer-Policy': 'no-referrer',
+      },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Storage signing error';
