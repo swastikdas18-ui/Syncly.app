@@ -16,11 +16,26 @@ interface Community {
 
 export default function ExploreCommunitiesPage() {
   const router = useRouter();
-  const { allCommunities, joinedCommunities, activeCommunity, switchCommunity } = useWorkspace();
+  const {
+    allCommunities,
+    joinedCommunities,
+    activeCommunity,
+    switchCommunity,
+    joinCommunity,
+    refreshMemberships,
+    membershipStatus,
+    membershipError,
+  } = useWorkspace();
   const { activeTenant } = useTenant();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const [joiningCommunityId, setJoiningCommunityId] = useState<string | null>(null);
+  const [joinFeedback, setJoinFeedback] = useState<{
+    communityId: string;
+    tone: 'success' | 'pending' | 'error';
+    message: string;
+  } | null>(null);
 
   // Map real database workspaces
   const initialCommunities: Community[] = useMemo(() => {
@@ -47,6 +62,49 @@ export default function ExploreCommunitiesPage() {
     }
   };
 
+  const handleJoinWorkspace = async (community: Community) => {
+    setJoiningCommunityId(community.id);
+    setJoinFeedback(null);
+
+    try {
+      const result = await joinCommunity(community.id, {
+        message: 'Requesting access to this corporate workspace.',
+      });
+      const message = result.message || (result as any).error || 'Workspace access request processed.';
+
+      if (result.status === 'joined') {
+        // Refresh again after the context's joined response handler to ensure the card
+        // changes from "Not Enrolled" to the verified membership state.
+        await refreshMemberships();
+        setJoinFeedback({
+          communityId: community.id,
+          tone: 'success',
+          message: 'You already have access or have joined successfully. Your membership has been refreshed.',
+        });
+      } else if (result.status === 'pending' || result.status === 'already_requested') {
+        setJoinFeedback({
+          communityId: community.id,
+          tone: 'pending',
+          message,
+        });
+      } else {
+        setJoinFeedback({
+          communityId: community.id,
+          tone: 'error',
+          message,
+        });
+      }
+    } catch (error: any) {
+      setJoinFeedback({
+        communityId: community.id,
+        tone: 'error',
+        message: error?.message || 'Unable to request workspace access. Please try again.',
+      });
+    } finally {
+      setJoiningCommunityId(null);
+    }
+  };
+
   const filteredCommunities = useMemo(() => {
     if (!searchQuery.trim()) return initialCommunities;
     const term = searchQuery.toLowerCase().trim();
@@ -64,13 +122,38 @@ export default function ExploreCommunitiesPage() {
       {switchError && (
         <div className="p-3.5 bg-rose-950/20 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-center justify-between">
           <span>{switchError}</span>
-          <button 
-            type="button" 
-            onClick={() => setSwitchError(null)} 
+          <button
+            type="button"
+            onClick={() => setSwitchError(null)}
             className="text-rose-400 hover:text-rose-200 font-bold ml-2"
           >
             ×
           </button>
+        </div>
+      )}
+
+      {membershipStatus === 'error' && membershipError && (
+        <div className="p-3.5 bg-amber-950/20 border border-amber-500/30 rounded-xl text-xs text-amber-200 flex items-center justify-between gap-3">
+          <span>Membership verification failed: {membershipError}</span>
+          <button
+            type="button"
+            onClick={() => refreshMemberships()}
+            className="shrink-0 font-semibold underline underline-offset-2"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {joinFeedback && (
+        <div className={`p-3.5 rounded-xl text-xs border ${
+          joinFeedback.tone === 'success'
+            ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+            : joinFeedback.tone === 'pending'
+              ? 'bg-amber-950/20 border-amber-500/30 text-amber-200'
+              : 'bg-rose-950/20 border-rose-500/30 text-rose-300'
+        }`}>
+          {joinFeedback.message}
         </div>
       )}
 
@@ -128,10 +211,25 @@ export default function ExploreCommunitiesPage() {
                     >
                       Switch to Workspace
                     </button>
-                  ) : (
+                  ) : membershipStatus === 'loading' || membershipStatus === 'idle' ? (
                     <span className="text-xs px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 font-medium">
-                      Not Enrolled
+                      Checking Access…
                     </span>
+                  ) : membershipStatus === 'error' || membershipStatus === 'unauthorized' || membershipStatus === 'forbidden' ? (
+                    <button
+                      onClick={() => refreshMemberships()}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium"
+                    >
+                      Retry Access Check
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleJoinWorkspace(community)}
+                      disabled={joiningCommunityId === community.id}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-wait"
+                    >
+                      {joiningCommunityId === community.id ? 'Joining…' : 'Join Workspace'}
+                    </button>
                   )}
                 </div>
               </div>
