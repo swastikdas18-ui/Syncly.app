@@ -93,11 +93,12 @@ export default function ChannelDashboardPage() {
 
     const unsubscribe = api.subscribeToEvents((_event, data) => {
       const payload = data as { type?: string; channel?: Channel };
-      if (payload.type !== 'CHANNEL_CREATED' || !payload.channel) return;
+      const createdChannel = payload.channel;
+      if (payload.type !== 'CHANNEL_CREATED' || !createdChannel) return;
 
       setChannels((prev) => {
-        if (prev.some((channel) => channel.id === payload.channel!.id)) return prev;
-        return [...prev, payload.channel!];
+        if (prev.some((channel) => channel.id === createdChannel.id)) return prev;
+        return [...prev, createdChannel];
       });
     });
 
